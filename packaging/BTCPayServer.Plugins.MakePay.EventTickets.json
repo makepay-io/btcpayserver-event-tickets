@@ -1,0 +1,12 @@
+{
+  "Identifier": "BTCPayServer.Plugins.MakePay.EventTickets",
+  "Name": "MakePay Event Tickets",
+  "Version": "1.0.0.0",
+  "Description": "Event ticket storefront, POS, QR check-in, Resend or SMTP delivery, PDF, Apple Wallet, and Google Wallet.",
+  "SystemPlugin": false,
+  "Dependencies": [{ "Identifier": "BTCPayServer", "Condition": ">=2.3.5" }],
+  "Documentation": "https://github.com/makepay-io/btcpayserver-event-tickets",
+  "Source": "https://github.com/makepay-io/btcpayserver-event-tickets",
+  "Author": "MakePay.io",
+  "AuthorLink": "https://makepay.io"
+}
