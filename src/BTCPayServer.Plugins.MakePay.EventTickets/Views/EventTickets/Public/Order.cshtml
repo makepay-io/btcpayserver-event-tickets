@@ -15,7 +15,16 @@
 }
 else if (Model.Order.Status == TicketOrderStatus.Cancelled)
 {
-    <main class="et-pending"><h1>This order was cancelled</h1><p class="et-section-copy">No ticket was issued. Start a new order if you still want to attend.</p><a class="et-primary" asp-action="Event" asp-route-storeId="@Model.Order.StoreId" asp-route-eventId="@Model.Event.Slug">Choose tickets</a></main>
+    <main class="et-pending">
+        <h1>This order was cancelled</h1>
+        <p class="et-section-copy">No ticket was issued. Rebuy reserves the same selection in a fresh session.</p>
+        <div class="et-restart-actions">
+            <form method="post" asp-action="Rebuy" asp-route-storeId="@Model.Order.StoreId" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
+                <button class="et-primary" type="submit" data-loading-title="Reserving your tickets…" data-loading-message="We are creating a fresh reservation with your previous selection.">Rebuy tickets</button>
+            </form>
+            <a class="et-secondary" asp-action="Event" asp-route-storeId="@Model.Order.StoreId" asp-route-eventId="@Model.Event.Slug">Choose different tickets</a>
+        </div>
+    </main>
 }
 else
 {
@@ -51,6 +60,9 @@ else
         </section>
         <partial name="~/Views/EventTickets/Public/_Footer.cshtml" model="Model.Settings" />
     </main>
+    <script>
+    (()=>{try{localStorage.removeItem(@Html.Raw(System.Text.Json.JsonSerializer.Serialize($"makepay:event-tickets:checkout:v1:{Model.Order.StoreId}:{Model.Event.Id}")))}catch{}})();
+    </script>
 }
 </body>
 </html>

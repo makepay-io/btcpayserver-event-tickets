@@ -14,15 +14,25 @@
     <partial name="~/Views/EventTickets/Public/_Stepper.cshtml" model="Model.Step" />
     @if (Model.Order.Status == TicketOrderStatus.Cancelled || Model.Order.ReservationExpiresAt <= DateTimeOffset.UtcNow)
     {
-        <section class="et-pending"><h1>This reservation has ended</h1><p class="et-section-copy">Your tickets were released before checkout was completed.</p><a class="et-primary" asp-action="Event" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug">Choose tickets</a></section>
+        <section class="et-pending">
+            <h1>This reservation has ended</h1>
+            <p class="et-section-copy">Your tickets were released before checkout was completed. Rebuy reserves the same selection again and restores the details saved in this browser.</p>
+            <div class="et-restart-actions">
+                <form method="post" asp-action="Rebuy" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
+                    <button class="et-primary" type="submit" data-loading-title="Reserving your tickets…" data-loading-message="We are creating a fresh reservation with your previous selection.">Rebuy tickets</button>
+                </form>
+                <a class="et-secondary" asp-action="Event" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug">Choose different tickets</a>
+            </div>
+        </section>
     }
     else
     {
-        <form method="post" asp-action="CreatePayment" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
+        <form method="post" data-et-checkout-form asp-action="CreatePayment" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
             <div asp-validation-summary="All" class="et-alert"></div>
             <section>
                 <h1 class="et-section-heading">Billing details</h1>
                 <p class="et-section-copy">We use this information for your payment receipt and ticket delivery.</p>
+                <p class="et-help">Saved only in this browser for up to 30 days so an expired reservation is easier to restart. Payment details, passwords, and consent are never stored.</p>
                 <div class="et-form-card et-grid-2">
                     <div class="et-field"><label for="buyer-first">First name <span class="et-required">*</span></label><input class="et-input" id="buyer-first" name="BuyerFirstName" value="@Model.Input.BuyerFirstName" autocomplete="given-name" required></div>
                     <div class="et-field"><label for="buyer-last">Last name <span class="et-required">*</span></label><input class="et-input" id="buyer-last" name="BuyerLastName" value="@Model.Input.BuyerLastName" autocomplete="family-name" required></div>
@@ -76,7 +86,7 @@
     }
 </main>
 <script>
-(()=>{const toggle=document.getElementById('copy-buyer');if(!toggle)return;toggle.addEventListener('change',()=>{if(!toggle.checked)return;const pairs=[['buyer-first','attendee-0-first'],['buyer-last','attendee-0-last'],['buyer-email','attendee-0-email'],['buyer-phone','attendee-0-phone'],['buyer-country','attendee-0-country']];pairs.forEach(([source,target])=>{const from=document.getElementById(source),to=document.getElementById(target);if(from&&to)to.value=from.value})})})();
+(()=>{const form=document.querySelector('[data-et-checkout-form]');if(!form)return;const storageKey=@Html.Raw(System.Text.Json.JsonSerializer.Serialize($"makepay:event-tickets:checkout:v1:{Model.StoreId}:{Model.Event.Id}")),maxAge=30*24*60*60*1000,buyer=/^Buyer(?:FirstName|LastName|Email|Phone|Country|Company)$/,attendee=/^Attendees\[\d+\]\.(?:FirstName|LastName|Nickname|Email|Phone|Country|Company)$/;const fields=()=>Array.from(form.elements).filter(field=>field instanceof HTMLInputElement&&(buyer.test(field.name)||attendee.test(field.name)));let saved=null;try{saved=JSON.parse(localStorage.getItem(storageKey)||'null');if(saved&&Date.now()-saved.updatedAt>maxAge){localStorage.removeItem(storageKey);saved=null}}catch{saved=null}if(saved?.values)fields().forEach(field=>{if(!field.value&&typeof saved.values[field.name]==='string')field.value=saved.values[field.name]});const persist=()=>{const values={};fields().forEach(field=>values[field.name]=field.value);try{localStorage.setItem(storageKey,JSON.stringify({updatedAt:Date.now(),values}))}catch{}};let timer;form.addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(persist,150)});form.addEventListener('change',persist);form.addEventListener('submit',persist);addEventListener('pagehide',persist);const toggle=document.getElementById('copy-buyer');if(!toggle)return;toggle.addEventListener('change',()=>{if(!toggle.checked)return;const pairs=[['buyer-first','attendee-0-first'],['buyer-last','attendee-0-last'],['buyer-email','attendee-0-email'],['buyer-phone','attendee-0-phone'],['buyer-country','attendee-0-country']];pairs.forEach(([source,target])=>{const from=document.getElementById(source),to=document.getElementById(target);if(from&&to)to.value=from.value});persist()})})();
 </script>
 </body>
 </html>
