@@ -14,7 +14,16 @@
     <partial name="~/Views/EventTickets/Public/_Stepper.cshtml" model="Model.Step" />
     @if (Model.Order.Status == TicketOrderStatus.Cancelled)
     {
-        <section class="et-pending"><h1>This reservation has ended</h1><p class="et-section-copy">Your tickets were released. Start again to create a new payment session.</p><a class="et-primary" asp-action="Event" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug">Choose tickets</a></section>
+        <section class="et-pending">
+            <h1>This reservation has ended</h1>
+            <p class="et-section-copy">Your tickets were released. Rebuy reserves the same selection in a fresh session.</p>
+            <div class="et-restart-actions">
+                <form method="post" asp-action="Rebuy" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
+                    <button class="et-primary" type="submit" data-loading-title="Reserving your tickets…" data-loading-message="We are creating a fresh reservation with your previous selection.">Rebuy tickets</button>
+                </form>
+                <a class="et-secondary" asp-action="Event" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug">Choose different tickets</a>
+            </div>
+        </section>
     }
     else
     {

@@ -39,6 +39,40 @@ public class TicketTests
     }
 
     [Fact]
+    public void RebuyKeepsQuantitiesAndUsesCurrentPrices()
+    {
+        var item = Event();
+        item.TicketTypes[0].Price = 30m;
+        var previous = new TicketOrder
+        {
+            Lines =
+            [
+                new TicketOrderLine { TicketTypeId = "general", Quantity = 2, UnitPrice = 25m },
+                new TicketOrderLine { TicketTypeId = "vip", Quantity = 1, UnitPrice = 75m }
+            ]
+        };
+
+        var lines = TicketCheckoutService.BuildRebuyLines(previous, item);
+
+        Assert.Collection(lines,
+            line => { Assert.Equal("general", line.TicketTypeId); Assert.Equal(2, line.Quantity); Assert.Equal(30m, line.UnitPrice); },
+            line => { Assert.Equal("vip", line.TicketTypeId); Assert.Equal(1, line.Quantity); Assert.Equal(75m, line.UnitPrice); });
+    }
+
+    [Fact]
+    public void RebuyRejectsUnavailablePreviousTicketType()
+    {
+        var item = Event();
+        item.TicketTypes[0].Active = false;
+        var previous = new TicketOrder
+        {
+            Lines = [new TicketOrderLine { TicketTypeId = "general", Quantity = 2, UnitPrice = 25m }]
+        };
+
+        Assert.Empty(TicketCheckoutService.BuildRebuyLines(previous, item));
+    }
+
+    [Fact]
     public void PromotionRecalculatesOrderTotal()
     {
         var order = new TicketOrder { Lines = [new TicketOrderLine { TicketTypeId = "general", Quantity = 2, UnitPrice = 25m }] };

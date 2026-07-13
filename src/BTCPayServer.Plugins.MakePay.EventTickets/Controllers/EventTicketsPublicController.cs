@@ -84,6 +84,53 @@ public sealed class EventTicketsPublicController(
         return RedirectToAction(nameof(Cart), new { storeId, eventId = item.Slug, orderId = order.Id, accessToken });
     }
 
+    [HttpPost("{eventId}/checkout/{orderId}/rebuy")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Rebuy(string storeId, string eventId, string orderId, string? accessToken)
+    {
+        var previousOrder = await repository.GetOrder(storeId, orderId);
+        var item = await repository.GetEvent(storeId, eventId);
+        if (previousOrder is null || item is null || previousOrder.EventId != item.Id || !item.Published ||
+            !checkout.CanAccess(previousOrder, accessToken)) return NotFound();
+
+        if (previousOrder.Status == TicketOrderStatus.Paid)
+            return RedirectToAction(nameof(Order), new { storeId, orderId, accessToken });
+
+        if (previousOrder.Status == TicketOrderStatus.Pending)
+        {
+            if (!string.IsNullOrWhiteSpace(previousOrder.InvoiceId))
+                return RedirectToAction(nameof(Payment), new { storeId, eventId = item.Slug, orderId, accessToken });
+            if (!TicketReservationPolicy.CanExpire(previousOrder, DateTimeOffset.UtcNow))
+                return RedirectToAction(nameof(Details), new { storeId, eventId = item.Slug, orderId, accessToken });
+
+            await repository.CancelOrder(storeId, previousOrder.Id);
+            previousOrder.Status = TicketOrderStatus.Cancelled;
+        }
+
+        var settings = await repository.GetSettings(storeId);
+        var lines = TicketCheckoutService.BuildRebuyLines(previousOrder, item);
+        if (previousOrder.Status != TicketOrderStatus.Cancelled || lines.Count == 0 || item.EndsAt <= DateTimeOffset.UtcNow)
+            return RedirectToAction(nameof(Event), new { storeId, eventId = item.Slug });
+
+        var order = await repository.TryCreateOrder(storeId, item, settings, lines);
+        if (order is null)
+            return RedirectToAction(nameof(Event), new { storeId, eventId = item.Slug });
+
+        order.PublicBaseUrl = Request.GetAbsoluteRoot();
+        order.PosMode = previousOrder.PosMode;
+        if (!string.IsNullOrWhiteSpace(previousOrder.PromoCode))
+            TicketCheckoutService.ApplyPromo(order, settings, previousOrder.PromoCode);
+        var newAccessToken = checkout.CreateAccessToken(order);
+        await repository.SaveOrder(storeId, order);
+        return RedirectToAction(nameof(Details), new
+        {
+            storeId,
+            eventId = item.Slug,
+            orderId = order.Id,
+            accessToken = newAccessToken
+        });
+    }
+
     [HttpGet("{eventId}/checkout/{orderId}/cart")]
     public async Task<IActionResult> Cart(string storeId, string eventId, string orderId, string? accessToken, string? promo)
     {

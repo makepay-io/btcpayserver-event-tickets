@@ -42,6 +42,36 @@ public sealed class TicketCheckoutService(TicketCodeService secrets)
         return lines;
     }
 
+    public static List<TicketOrderLine> BuildRebuyLines(TicketOrder previousOrder, TicketEvent item)
+    {
+        var quantities = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var line in ResolveLines(previousOrder, item))
+        {
+            if (line.Quantity < 1) return [];
+            var current = quantities.GetValueOrDefault(line.TicketTypeId);
+            if (current > int.MaxValue - line.Quantity) return [];
+            quantities[line.TicketTypeId] = current + line.Quantity;
+        }
+
+        if (quantities.Count == 0) return [];
+        foreach (var quantity in quantities)
+        {
+            var type = item.TicketTypes.FirstOrDefault(candidate =>
+                candidate.Active && candidate.Id.Equals(quantity.Key, StringComparison.OrdinalIgnoreCase));
+            if (type is null || quantity.Value > type.MaxPerOrder) return [];
+        }
+
+        return item.TicketTypes
+            .Where(type => type.Active && quantities.TryGetValue(type.Id, out var quantity) && quantity > 0)
+            .Select(type => new TicketOrderLine
+            {
+                TicketTypeId = type.Id,
+                Quantity = quantities[type.Id],
+                UnitPrice = type.Price
+            })
+            .ToList();
+    }
+
     public static List<TicketOrderLine> ResolveLines(TicketOrder order, TicketEvent item)
     {
         if (order.Lines.Count > 0) return order.Lines;
