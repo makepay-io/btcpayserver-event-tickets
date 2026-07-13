@@ -1,5 +1,5 @@
 @model TicketCheckoutPageViewModel
-@{ Layout = null; var invoiceUrl = Url.Action("Checkout", "UIInvoice", new { invoiceId = Model.Order.InvoiceId }); var statusUrl = Url.Action("OrderStatus", "EventTicketsPublic", new { storeId = Model.StoreId, orderId = Model.Order.Id, accessToken = Model.AccessToken }); }
+@{ Layout = null; var invoiceUrl = Url.Action("Checkout", "UIInvoice", new { invoiceId = Model.Order.InvoiceId }); var statusUrl = Url.Action("OrderStatus", "EventTicketsPublic", new { storeId = Model.StoreId, orderId = Model.Order.Id, accessToken = Model.AccessToken }); var analyticsEcommerce = TicketAnalytics.ForOrder(Model.Order, Model.Event, Model.Lines, payment: true); var analyticsOrderId = TicketAnalytics.AnalyticsTransactionId(Model.Order); var analyticsContext = new EventTicketAnalyticsContext { Settings = Model.Settings, StoreId = Model.StoreId, PageType = "payment", EventId = Model.Event.Id, EventSlug = Model.Event.Slug }; }
 <!doctype html>
 <html lang="en">
 <head>
@@ -9,6 +9,7 @@
     <partial name="~/Views/EventTickets/Public/_Theme.cshtml" model="Model.Settings" />
 </head>
 <body class="et-public">
+<partial name="~/Views/EventTickets/Public/_Analytics.cshtml" model="analyticsContext" />
 <main class="et-checkout-shell">
     <partial name="~/Views/EventTickets/Public/_Stepper.cshtml" model="Model.Step" />
     <section>
@@ -22,7 +23,7 @@
             <button class="et-primary" type="button" data-open-btcpay>Open secure checkout</button>
             <span class="et-payment-state" data-modal-state>Checkout will open automatically.</span>
         </div>
-        <p class="et-payment-help">Closed the modal? Use the button above to reopen it. You can also <a href="@invoiceUrl" target="_blank" rel="noopener">open this invoice in a new tab</a>.</p>
+        <p class="et-payment-help">Closed the modal? Use the button above to reopen it. You can also <a href="@invoiceUrl" target="_blank" rel="noopener noreferrer" data-invoice-link>open this invoice in a new tab</a>.</p>
         <div class="et-status-message" data-payment-status role="status"></div>
         <div class="et-summary" style="max-width:760px;margin-left:auto;margin-right:auto">
             <div class="et-summary-row"><span>@Model.Order.Quantity ticket@(Model.Order.Quantity == 1 ? "" : "s")</span><strong>@Model.Event.Name</strong></div>
@@ -33,12 +34,14 @@
 </main>
 <script src="~/modal/btcpay.js"></script>
 <script>
-(()=>{const invoiceId=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Order.InvoiceId)),statusUrl=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(statusUrl)),message=document.querySelector('[data-payment-status]'),modalState=document.querySelector('[data-modal-state]'),openButton=document.querySelector('[data-open-btcpay]');let stopped=false,modalOpen=false,opening=false,pollTimer;
+(()=>{const invoiceId=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Order.InvoiceId)),statusUrl=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(statusUrl)),analyticsOrderId=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(analyticsOrderId)),ecommerce=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(analyticsEcommerce)),analytics=window.makePayAnalytics,message=document.querySelector('[data-payment-status]'),modalState=document.querySelector('[data-modal-state]'),openButton=document.querySelector('[data-open-btcpay]');let stopped=false,modalOpen=false,opening=false,pollTimer;
 const setModalState=text=>{modalState.textContent=text};
+const trackPayment=()=>analytics?.trackOnce('add_payment_info',analyticsOrderId,{ecommerce});
 const poll=async(immediate=false)=>{if(stopped)return;clearTimeout(pollTimer);try{const response=await fetch(statusUrl,{headers:{accept:'application/json'},cache:'no-store'});if(!response.ok)throw new Error('status');const result=await response.json();if(result.status==='paid'&&result.redirectUrl){stopped=true;setModalState('Payment confirmed. Preparing your tickets…');window.location.assign(result.redirectUrl);return}if(result.status==='cancelled'){stopped=true;message.style.display='block';message.textContent=result.message;setModalState('This invoice is no longer payable.');openButton.disabled=true;if(result.redirectUrl)setTimeout(()=>window.location.replace(result.redirectUrl),1800);return}if(result.status==='processing'||result.status==='partial'){message.style.display='block';message.style.background='#ecfdf3';message.style.color='#067647';message.textContent=result.message;setModalState(result.status==='processing'?'Payment detected — awaiting confirmation.':'Partial payment detected — your order remains protected.')}else message.style.display='none'}catch{message.style.display='block';message.textContent='We could not refresh payment status. Your BTCPay checkout remains available.'}pollTimer=setTimeout(poll,immediate?900:2500)};
 const openCheckout=()=>{if(stopped||opening)return;if(!window.btcpay){message.style.display='block';message.textContent='BTCPay checkout could not be loaded. Use the invoice link below.';return}opening=true;openButton.disabled=true;setModalState('Opening secure checkout…');if(modalOpen)window.btcpay.showFrame();else{modalOpen=true;window.btcpay.showInvoice(invoiceId)}};
 openButton.addEventListener('click',openCheckout);
-if(window.btcpay){window.btcpay.onModalWillEnter(()=>{opening=false;openButton.disabled=false;modalOpen=true;setModalState('Secure checkout is open.')});window.btcpay.onModalWillLeave(()=>{opening=false;openButton.disabled=false;modalOpen=false;setModalState('Checkout closed. Reopen it when you are ready.');poll(true)});window.btcpay.onModalReceiveMessage(event=>{const data=event?.data??event;if(data?.invoiceId===invoiceId&&data?.status){setModalState(`BTCPay status: ${String(data.status).toLowerCase()}.`);poll(true)}});setTimeout(openCheckout,250)}else setModalState('Use the invoice link below to continue.');
+document.querySelector('[data-invoice-link]')?.addEventListener('click',trackPayment);
+if(window.btcpay){window.btcpay.onModalWillEnter(()=>{opening=false;openButton.disabled=false;modalOpen=true;setModalState('Secure checkout is open.');trackPayment()});window.btcpay.onModalWillLeave(()=>{opening=false;openButton.disabled=false;modalOpen=false;setModalState('Checkout closed. Reopen it when you are ready.');poll(true)});window.btcpay.onModalReceiveMessage(event=>{const data=event?.data??event;if(data?.invoiceId===invoiceId&&data?.status){setModalState(`BTCPay status: ${String(data.status).toLowerCase()}.`);poll(true)}});setTimeout(openCheckout,250)}else setModalState('Use the invoice link below to continue.');
 setTimeout(poll,1000)})();
 </script>
 </body>

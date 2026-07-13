@@ -1,8 +1,8 @@
 {
   "Identifier": "BTCPayServer.Plugins.MakePay.EventTickets",
   "Name": "MakePay Event Tickets",
-  "Version": "1.1.3.0",
-  "Description": "Branded multi-step event checkout with the BTCPay JavaScript modal, protected ticket delivery, POS, QR check-in, PDF, email, and wallet passes.",
+  "Version": "1.2.0.0",
+  "Description": "Branded multi-step event checkout with the BTCPay JavaScript modal, protected ticket delivery, POS, QR check-in, PDF, email, wallet passes, and privacy-aware ecommerce analytics.",
   "SystemPlugin": false,
   "Dependencies": [{ "Identifier": "BTCPayServer", "Condition": ">=2.3.5" }],
   "Documentation": "https://github.com/makepay-io/btcpayserver-event-tickets",

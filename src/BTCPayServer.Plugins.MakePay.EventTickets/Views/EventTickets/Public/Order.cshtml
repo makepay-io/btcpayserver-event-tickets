@@ -1,5 +1,5 @@
 @model TicketOrderViewModel
-@{ Layout = null; }
+@{ Layout = null; var analyticsEcommerce = TicketAnalytics.ForOrder(Model.Order, Model.Event, Model.Lines, purchase: true); var analyticsOrderId = TicketAnalytics.AnalyticsTransactionId(Model.Order); var analyticsContext = new EventTicketAnalyticsContext { Settings = Model.Settings, StoreId = Model.Order.StoreId, PageType = Model.Order.Status == TicketOrderStatus.Paid ? "purchase_confirmation" : Model.Order.Status == TicketOrderStatus.Pending ? "order_pending" : "order_cancelled", EventId = Model.Event.Id, EventSlug = Model.Event.Slug }; }
 <!doctype html>
 <html lang="en">
 <head>
@@ -9,6 +9,7 @@
     <partial name="~/Views/EventTickets/Public/_Theme.cshtml" model="Model.Settings" />
 </head>
 <body class="et-public">
+<partial name="~/Views/EventTickets/Public/_Analytics.cshtml" model="analyticsContext" />
 @if (Model.Order.Status == TicketOrderStatus.Pending)
 {
     <main class="et-pending"><div class="et-spinner"></div><h1>Waiting for payment confirmation</h1><p class="et-section-copy">BTCPay is still processing this order. You can return to the embedded payment or leave this page open.</p>@if(Model.Order.InvoiceId is not null){<a class="et-primary" asp-action="Payment" asp-route-storeId="@Model.Order.StoreId" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">Return to payment</a>}</main>
@@ -61,7 +62,7 @@ else
         <partial name="~/Views/EventTickets/Public/_Footer.cshtml" model="Model.Settings" />
     </main>
     <script>
-    (()=>{try{localStorage.removeItem(@Html.Raw(System.Text.Json.JsonSerializer.Serialize($"makepay:event-tickets:checkout:v1:{Model.Order.StoreId}:{Model.Event.Id}")))}catch{}})();
+    (()=>{const analytics=window.makePayAnalytics,ecommerce=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(analyticsEcommerce)),analyticsOrderId=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(analyticsOrderId)),consentGrantedEvent=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(TicketAnalytics.ConsentGrantedEvent)),sendPurchase=()=>analytics?.purchaseOnce(analyticsOrderId,{ecommerce});sendPurchase();addEventListener(consentGrantedEvent,sendPurchase,{once:true});try{localStorage.removeItem(@Html.Raw(System.Text.Json.JsonSerializer.Serialize($"makepay:event-tickets:checkout:v1:{Model.Order.StoreId}:{Model.Event.Id}")))}catch{}})();
     </script>
 }
 </body>

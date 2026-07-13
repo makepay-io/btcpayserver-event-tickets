@@ -3,6 +3,16 @@
     Layout = null;
     var heroImage = Model.Event.BannerUrl ?? Model.Settings.HeroImageUrl;
     var activeTypes = Model.Event.TicketTypes.Where(type => type.Active).ToList();
+    var analyticsItems = TicketAnalytics.ForEvent(Model.Event, activeTypes);
+    var analyticsEcommerce = new
+    {
+        currency = Model.Settings.Currency.ToUpperInvariant(),
+        value = analyticsItems.Sum(item => item.Price * item.Quantity),
+        item_list_id = Model.Event.Id,
+        item_list_name = Model.Event.Name,
+        items = analyticsItems
+    };
+    var analyticsContext = new EventTicketAnalyticsContext { Settings = Model.Settings, StoreId = Model.StoreId, PageType = Model.PosMode ? "pos_ticket_selection" : "ticket_selection", EventId = Model.Event.Id, EventSlug = Model.Event.Slug };
 }
 <!doctype html>
 <html lang="en">
@@ -13,6 +23,7 @@
     <partial name="~/Views/EventTickets/Public/_Theme.cshtml" model="Model.Settings" />
 </head>
 <body class="et-public">
+<partial name="~/Views/EventTickets/Public/_Analytics.cshtml" model="analyticsContext" />
 <main class="et-brand-shell">
     <aside class="et-brand-panel">
         @if (!string.IsNullOrWhiteSpace(heroImage))
@@ -48,7 +59,7 @@
                 {
                     var remaining = Model.Remaining[type.Id];
                     var max = Math.Min(type.MaxPerOrder, remaining ?? type.MaxPerOrder);
-                    <article class="et-ticket-row @(remaining == 0 ? "is-sold" : "")" data-ticket-row data-price="@type.Price.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-max="@max">
+                    <article class="et-ticket-row @(remaining == 0 ? "is-sold" : "")" data-ticket-row data-ticket-type-id="@type.Id" data-price="@type.Price.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-max="@max">
                         <div>
                             @if (!string.IsNullOrWhiteSpace(type.Badge)) { <span class="et-badge">@type.Badge</span> }
                             <h3 class="et-ticket-name">@type.Name</h3>
@@ -91,9 +102,10 @@
     </section>
 </main>
 <script>
-(()=>{const form=document.getElementById('ticket-selection'),rows=[...form.querySelectorAll('[data-ticket-row]')],total=form.querySelector('[data-selection-total]'),continueButton=form.querySelector('[data-continue]');
+(()=>{const form=document.getElementById('ticket-selection'),rows=[...form.querySelectorAll('[data-ticket-row]')],total=form.querySelector('[data-selection-total]'),continueButton=form.querySelector('[data-continue]'),ecommerce=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(analyticsEcommerce)),analytics=window.makePayAnalytics,itemFor=row=>ecommerce.items.find(item=>item.ticket_type_id===row.dataset.ticketTypeId);
 const update=()=>{let amount=0,count=0;rows.forEach(row=>{const input=row.querySelector('input[type=hidden]'),value=Number(input.value),max=Number(row.dataset.max);row.querySelector('output').textContent=value;row.querySelector('[data-quantity-minus]').disabled=value<=0;row.querySelector('[data-quantity-plus]').disabled=value>=max;amount+=value*Number(row.dataset.price);count+=value});total.textContent=amount.toFixed(2);continueButton.disabled=count===0};
-rows.forEach(row=>{const input=row.querySelector('input[type=hidden]');row.querySelector('[data-quantity-minus]').addEventListener('click',()=>{input.value=Math.max(0,Number(input.value)-1);update()});row.querySelector('[data-quantity-plus]').addEventListener('click',()=>{input.value=Math.min(Number(row.dataset.max),Number(input.value)+1);update()})});
+analytics?.track('view_item',{ecommerce});
+rows.forEach(row=>{const input=row.querySelector('input[type=hidden]'),item=itemFor(row);row.querySelector('[data-quantity-minus]').addEventListener('click',()=>{input.value=Math.max(0,Number(input.value)-1);update()});row.querySelector('[data-quantity-plus]').addEventListener('click',()=>{const before=Number(input.value);input.value=Math.min(Number(row.dataset.max),before+1);if(before===0&&Number(input.value)===1&&item)analytics?.track('select_item',{ecommerce:{currency:ecommerce.currency,value:Number(item.price||0),item_list_id:ecommerce.item_list_id,item_list_name:ecommerce.item_list_name,items:[{...item,quantity:1}]}});update()})});
 form.querySelectorAll('[data-show-more]').forEach(button=>button.addEventListener('click',()=>{const description=button.previousElementSibling;description.classList.toggle('is-open');button.textContent=description.classList.contains('is-open')?'Show less':'Show more'}));update()})();
 </script>
 </body>

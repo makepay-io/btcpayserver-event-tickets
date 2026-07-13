@@ -66,6 +66,20 @@
             </section>
         </div>
         <div class="col-12">
+            <section class="bg-tile rounded p-4">
+                <h4>Analytics &amp; ecommerce events</h4>
+                <p class="text-muted">Connect one Google provider without exposing customer data. Ticket pages push GA4 ecommerce events for product views, selection, cart, checkout, BTCPay payment, and confirmed purchases.</p>
+                <div class="row">
+                    <div class="col-lg-4 form-group"><label asp-for="AnalyticsProvider" class="form-label">Analytics provider</label><select asp-for="AnalyticsProvider" asp-items="Html.GetEnumSelectList<AnalyticsProvider>()" class="form-select" data-analytics-provider></select><div class="form-text">Choose either GTM or direct GA4 to avoid duplicate reporting. Disabled still keeps the local <code>dataLayer</code> event contract available.</div></div>
+                    <div class="col-lg-4 form-group" data-analytics-field="gtm"><label asp-for="GoogleTagManagerContainerId" class="form-label">GTM container ID</label><input asp-for="GoogleTagManagerContainerId" class="form-control font-monospace" placeholder="GTM-ABC123" autocomplete="off"><span asp-validation-for="GoogleTagManagerContainerId" class="text-danger"></span></div>
+                    <div class="col-lg-4 form-group" data-analytics-field="ga4"><label asp-for="GoogleAnalyticsMeasurementId" class="form-label">GA4 measurement ID</label><input asp-for="GoogleAnalyticsMeasurementId" class="form-control font-monospace" placeholder="G-ABC123DEF4" autocomplete="off"><span asp-validation-for="GoogleAnalyticsMeasurementId" class="text-danger"></span></div>
+                </div>
+                <div class="form-check mb-2"><input asp-for="RequireAnalyticsConsent" class="form-check-input"><label asp-for="RequireAnalyticsConsent" class="form-check-label">Require visitor consent before loading Google</label></div>
+                <div class="form-check"><input asp-for="RespectDoNotTrack" class="form-check-input"><label asp-for="RespectDoNotTrack" class="form-check-label">Respect browser Do Not Track</label></div>
+                <div class="form-text mt-3">The integration never puts buyer or attendee names, email addresses, phone numbers, access tokens, invoice IDs, payment addresses, or ticket codes in its event payloads. Purchase uses best-effort browser deduplication and a stable one-way transaction ID so GA4 can deduplicate repeated delivery. In GTM, trigger page tracking from MakePay's <code>page_view</code> event and map its sanitized <code>page_location</code>/<code>page_path</code>; do not use an All Pages auto-pageview or the browser Page URL on protected checkout and order routes.</div>
+            </section>
+        </div>
+        <div class="col-12">
             <section class="bg-tile rounded p-4"><h4>MakePay attribution</h4><div class="form-check mb-3"><input asp-for="ShowMakePayPromotion" class="form-check-input"><label asp-for="ShowMakePayPromotion" class="form-check-label">Show MakePay promotion on public pages</label></div><div class="form-group mb-0"><label asp-for="PromotionText" class="form-label"></label><input asp-for="PromotionText" class="form-control"></div></section>
         </div>
     </div>
@@ -124,4 +138,7 @@ if(state==='payment')frame.srcdoc=frame.srcdoc.replace('<div class="btcpay"><div
 editorFields.forEach(field=>field.addEventListener('input',()=>{const target=source(field.dataset.editorTarget);if(target){target.value=field.value;target.dispatchEvent(new Event('change',{bubbles:true}))}render()}));
 document.getElementById('open-theme-editor').addEventListener('click',()=>{syncFromForm();render();dialog.showModal()});document.getElementById('close-theme-editor').addEventListener('click',()=>dialog.close());document.getElementById('save-theme-editor').addEventListener('click',()=>{dialog.close();form.requestSubmit()});
 dialog.querySelectorAll('[data-preview-state]').forEach(button=>button.addEventListener('click',()=>{dialog.querySelectorAll('[data-preview-state]').forEach(item=>item.classList.remove('is-active'));button.classList.add('is-active');state=button.dataset.previewState;render()}));dialog.querySelectorAll('[data-preview-device]').forEach(button=>button.addEventListener('click',()=>{dialog.querySelectorAll('[data-preview-device]').forEach(item=>item.classList.remove('is-active'));button.classList.add('is-active');wrap.classList.toggle('is-mobile',button.dataset.previewDevice==='mobile')}));})();
+</script>
+<script>
+(()=>{const provider=document.querySelector('[data-analytics-provider]'),fields={gtm:document.querySelector('[data-analytics-field="gtm"]'),ga4:document.querySelector('[data-analytics-field="ga4"]')};if(!provider)return;const update=()=>{fields.gtm.hidden=provider.value!=='1';fields.ga4.hidden=provider.value!=='2'};provider.addEventListener('change',update);update()})();
 </script>

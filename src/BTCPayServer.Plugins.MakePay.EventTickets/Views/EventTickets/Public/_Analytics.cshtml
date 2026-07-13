@@ -1,0 +1,77 @@
+@model EventTicketAnalyticsContext
+@using System.Text.Json
+@using System.Text.RegularExpressions
+@inject BTCPayServer.Security.ContentSecurityPolicies Csp
+@{
+    var gtmId = Model.Settings.GoogleTagManagerContainerId?.Trim().ToUpperInvariant();
+    var gaId = Model.Settings.GoogleAnalyticsMeasurementId?.Trim().ToUpperInvariant();
+    var provider = Model.Settings.AnalyticsProvider switch
+    {
+        AnalyticsProvider.GoogleTagManager when gtmId is not null && Regex.IsMatch(gtmId, "^GTM-[A-Z0-9]+$") => "gtm",
+        AnalyticsProvider.GoogleAnalytics when gaId is not null && Regex.IsMatch(gaId, "^G-[A-Z0-9]+$") => "ga4",
+        _ => "disabled"
+    };
+    var providerId = provider == "gtm" ? gtmId : provider == "ga4" ? gaId : null;
+    if (provider != "disabled")
+    {
+        foreach (var source in TicketAnalytics.GoogleScriptSources) Csp.Add("script-src", source);
+        foreach (var source in TicketAnalytics.GoogleConnectSources) Csp.Add("connect-src", source);
+    }
+    var config = new
+    {
+        provider,
+        providerId,
+        requireConsent = Model.Settings.RequireAnalyticsConsent,
+        respectDoNotTrack = Model.Settings.RespectDoNotTrack,
+        storeId = Model.StoreId,
+        pageType = Model.PageType,
+        eventId = Model.EventId,
+        eventSlug = Model.EventSlug
+    };
+}
+<style>
+    .et-analytics-consent{position:fixed;z-index:10000;left:20px;right:20px;bottom:20px;max-width:680px;margin:auto;padding:18px;border:1px solid var(--et-border,#e4e7ec);border-radius:16px;background:var(--et-surface,#fff);color:var(--et-text,#101828);box-shadow:0 20px 60px rgba(16,24,40,.2)}
+    .et-analytics-consent[hidden],.et-analytics-preferences[hidden]{display:none!important}.et-analytics-consent strong{display:block;margin-bottom:4px}.et-analytics-consent p{margin:0;color:var(--et-muted,#667085);font-size:.88rem}.et-analytics-consent p a{font-weight:750}.et-analytics-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:14px}.et-analytics-actions button{min-height:42px;border-radius:9px;padding:9px 15px;font:inherit;font-weight:800;cursor:pointer}.et-analytics-accept{border:1px solid var(--et-accent,#155eef);background:var(--et-accent,#155eef);color:var(--et-accent-text,#fff)}.et-analytics-decline{border:1px solid var(--et-border,#e4e7ec);background:var(--et-surface,#fff);color:var(--et-text,#101828)}
+    .et-analytics-preferences{position:fixed;z-index:9999;left:16px;bottom:16px;border:1px solid var(--et-border,#e4e7ec);border-radius:999px;padding:8px 12px;background:var(--et-surface,#fff);color:var(--et-muted,#667085);box-shadow:0 8px 24px rgba(16,24,40,.12);font:700 .75rem/1.2 var(--et-font,system-ui,sans-serif);cursor:pointer}
+    @@media(max-width:620px){.et-analytics-consent{left:12px;right:12px;bottom:12px}.et-analytics-actions button{width:100%}}
+</style>
+<div class="et-analytics-consent" data-et-analytics-consent role="dialog" aria-modal="true" aria-labelledby="et-analytics-title" hidden>
+    <strong id="et-analytics-title">Analytics preferences</strong>
+    <p>Help us understand how this ticket shop is used. MakePay analytics events never include names, email addresses, phone numbers, attendee details, payment addresses, or access tokens.@if (!string.IsNullOrWhiteSpace(Model.Settings.PrivacyUrl)) { <text> <a href="@Model.Settings.PrivacyUrl" target="_blank" rel="noopener noreferrer">Privacy policy</a></text> }</p>
+    <div class="et-analytics-actions"><button class="et-analytics-accept" type="button" data-et-analytics-accept>Allow analytics</button><button class="et-analytics-decline" type="button" data-et-analytics-decline>Only necessary</button></div>
+</div>
+<button class="et-analytics-preferences" type="button" data-et-analytics-preferences hidden>Analytics preferences</button>
+<script>
+((config)=>{
+    const root=window,layer=root.dataLayer=root.dataLayer||[],providerConfigured=config.provider!=='disabled'&&Boolean(config.providerId),nonce=document.querySelector('[nonce]')?.nonce||'';
+    const sanitizePagePath=value=>{const path=typeof value==='string'&&value.startsWith('/')?value:'/';return path.replace(/(\/events\/[^/]+\/checkout\/)[^/]+/gi,'$1:order_id').replace(/(\/events\/order\/)[^/]+/gi,'$1:order_id')};
+    const safePath=sanitizePagePath(location.pathname),safeLocation=location.origin+safePath,safeReferrer=(()=>{try{const value=new URL(document.referrer);return value.origin+sanitizePagePath(value.pathname)}catch{return''}})();
+    const makepay=Object.freeze({plugin:'event_tickets',store_id:config.storeId,schema_version:'1'}),context=Object.freeze({page_type:config.pageType,event_id:config.eventId||undefined,event_slug:config.eventSlug||undefined,page_location:safeLocation,page_path:safePath,page_referrer:safeReferrer||undefined});
+    const consentGrantedEvent=@Html.Raw(JsonSerializer.Serialize(TicketAnalytics.ConsentGrantedEvent));
+    const consentKey=`makepay:analytics:consent:v1:event_tickets:${config.storeId}`,oncePrefix=`makepay:analytics:once:v1:event_tickets:${config.storeId}:${config.provider}`;
+    const consent=document.querySelector('[data-et-analytics-consent]'),preferences=document.querySelector('[data-et-analytics-preferences]'),accept=document.querySelector('[data-et-analytics-accept]'),decline=document.querySelector('[data-et-analytics-decline]');
+    const dnt=config.respectDoNotTrack&&(navigator.doNotTrack==='1'||navigator.doNotTrack==='yes'||root.doNotTrack==='1');
+    let collectionAllowed=!providerConfigured&&!dnt,externalActive=false,externalStarted=false,pageViewSent=false;
+    const storage={get:(kind,key)=>{try{return (kind==='session'?sessionStorage:localStorage).getItem(key)}catch{return null}},set:(kind,key,value)=>{try{(kind==='session'?sessionStorage:localStorage).setItem(key,value)}catch{}}};
+    const gtag=root.gtag=root.gtag||function(){layer.push(arguments)};
+    const consentUpdate=granted=>gtag('consent','update',{analytics_storage:granted?'granted':'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',functionality_storage:'granted',security_storage:'granted'});
+    if(providerConfigured)gtag('consent','default',{analytics_storage:config.requireConsent?'denied':'granted',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',functionality_storage:'granted',security_storage:'granted',wait_for_update:500});
+    const directPayload=payload=>{const source=payload||{},ecommerce=source.ecommerce||{},rest={...source};delete rest.ecommerce;return {...rest,...ecommerce,makepay_plugin:makepay.plugin,makepay_store_id:makepay.store_id,makepay_schema_version:makepay.schema_version,page_type:context.page_type,event_public_id:context.event_id,page_location:safeLocation,page_path:safePath,page_referrer:safeReferrer||undefined}};
+    const sendDirect=(name,payload)=>gtag('event',name,directPayload(payload));
+    const sendSafePageView=()=>{if(config.provider!=='ga4'||pageViewSent)return;pageViewSent=true;gtag('event','page_view',{page_title:document.title,page_location:safeLocation,page_path:safePath,page_referrer:safeReferrer||undefined,makepay_plugin:makepay.plugin,makepay_store_id:makepay.store_id,makepay_schema_version:makepay.schema_version,page_type:context.page_type,event_public_id:context.event_id})};
+    const pushContext=()=>{layer.push({event:'page_context',makepay,...context});if(config.provider!=='ga4')layer.push({event:'page_view',makepay,...context,page_title:document.title})};
+    const loadExternal=()=>{if(!providerConfigured)return;if(externalStarted){externalActive=true;consentUpdate(true);if(config.provider==='ga4'){pageViewSent=false;sendSafePageView()}return}externalStarted=true;externalActive=true;consentUpdate(true);if(config.provider==='gtm'){layer.push({'gtm.start':Date.now(),event:'gtm.js'});const script=document.createElement('script');script.async=true;script.src=`https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(config.providerId)}`;if(nonce)script.nonce=nonce;document.head.appendChild(script)}else{const script=document.createElement('script');script.async=true;script.src=`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(config.providerId)}`;if(nonce)script.nonce=nonce;document.head.appendChild(script);gtag('js',new Date());gtag('config',config.providerId,{send_page_view:false,allow_google_signals:false,allow_ad_personalization_signals:false});sendSafePageView()}};
+    const track=(name,payload={})=>{if(!collectionAllowed)return false;layer.push({ecommerce:null});layer.push({event:name,makepay,...context,...payload});if(config.provider==='ga4'&&externalActive)sendDirect(name,payload);return true};
+    const trackOnce=(name,uniqueId,payload={},kind='session')=>{if(!collectionAllowed)return false;const key=`${oncePrefix}:${name}:${String(uniqueId)}`;if(storage.get(kind,key)==='1')return false;track(name,payload);storage.set(kind,key,'1');return true};
+    const purchaseOnce=(transactionId,payload)=>trackOnce('purchase',transactionId,payload,'local');
+    const enableCollection=()=>{collectionAllowed=true;consentUpdate(true);gtag('set',{page_location:safeLocation,page_path:safePath,page_referrer:safeReferrer||undefined});pushContext();loadExternal()};
+    const showConsent=()=>{if(!providerConfigured||!config.requireConsent)return;consent.hidden=false;preferences.hidden=true;setTimeout(()=>accept.focus(),0)};
+    const hideConsent=()=>{consent.hidden=true;preferences.hidden=!providerConfigured||!config.requireConsent};
+    const saveChoice=value=>storage.set('local',consentKey,value);
+    accept.addEventListener('click',()=>{saveChoice('granted');hideConsent();enableCollection();dispatchEvent(new CustomEvent(consentGrantedEvent))});
+    decline.addEventListener('click',()=>{const reloadWithoutProvider=externalStarted;saveChoice('denied');collectionAllowed=false;externalActive=false;consentUpdate(false);hideConsent();if(reloadWithoutProvider)location.reload()});
+    preferences.addEventListener('click',showConsent);
+    root.makePayAnalytics=Object.freeze({track,trackOnce,purchaseOnce,openConsent:showConsent,isCollecting:()=>collectionAllowed,context:makepay});
+    if(!providerConfigured){hideConsent();if(!dnt)pushContext();return}if(dnt){collectionAllowed=false;consentUpdate(false);consent.hidden=true;preferences.hidden=true;return}const choice=storage.get('local',consentKey);if(!config.requireConsent||choice==='granted'){hideConsent();enableCollection()}else if(choice==='denied'){collectionAllowed=false;consentUpdate(false);hideConsent()}else{collectionAllowed=false;showConsent()}
+})(@Html.Raw(JsonSerializer.Serialize(config)));
+</script>

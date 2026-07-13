@@ -1,5 +1,17 @@
 @model EventStorefrontViewModel
-@{ Layout = null; }
+@{
+    Layout = null;
+    var analyticsItems = TicketAnalytics.ForStorefront(Model.Events);
+    var analyticsEcommerce = new
+    {
+        currency = Model.Settings.Currency.ToUpperInvariant(),
+        value = analyticsItems.Sum(item => item.Price * item.Quantity),
+        item_list_id = "event_storefront",
+        item_list_name = Model.Settings.StorefrontTitle,
+        items = analyticsItems
+    };
+    var analyticsContext = new EventTicketAnalyticsContext { Settings = Model.Settings, StoreId = Model.StoreId, PageType = "storefront" };
+}
 <!doctype html>
 <html lang="en">
 <head>
@@ -12,6 +24,7 @@
     </style>
 </head>
 <body class="et-public">
+<partial name="~/Views/EventTickets/Public/_Analytics.cshtml" model="analyticsContext" />
 <main class="event-directory">
     <header class="event-directory-header">
         @if (!string.IsNullOrWhiteSpace(Model.Settings.LogoUrl)) { <img class="event-directory-logo" src="@Model.Settings.LogoUrl" alt="@Model.Settings.StorefrontTitle"> }
@@ -34,7 +47,7 @@
                         <h2>@item.Name</h2>
                         <p class="event-card-meta">@item.StartsAt.ToString("ddd, dd MMM yyyy · HH:mm")<br>@item.VenueName</p>
                         <p class="event-card-copy">@item.Description</p>
-                        <a class="et-primary" asp-action="Event" asp-route-storeId="@Model.StoreId" asp-route-eventId="@item.Slug">View tickets</a>
+                        <a class="et-primary" data-select-event="@item.Id" asp-action="Event" asp-route-storeId="@Model.StoreId" asp-route-eventId="@item.Slug">View tickets</a>
                     </div>
                 </article>
             }
@@ -42,5 +55,8 @@
     }
     <partial name="~/Views/EventTickets/Public/_Footer.cshtml" model="Model.Settings" />
 </main>
+<script>
+(()=>{const ecommerce=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(analyticsEcommerce)),analytics=window.makePayAnalytics;analytics?.track('view_item_list',{ecommerce});document.querySelectorAll('[data-select-event]').forEach(link=>link.addEventListener('click',()=>{const items=ecommerce.items.filter(item=>item.item_id===link.dataset.selectEvent),value=items.reduce((sum,item)=>sum+Number(item.price||0)*Number(item.quantity||1),0);analytics?.track('select_item',{ecommerce:{currency:ecommerce.currency,value,item_list_id:link.dataset.selectEvent,item_list_name:items[0]?.item_list_name||'',items}})}))})();
+</script>
 </body>
 </html>
