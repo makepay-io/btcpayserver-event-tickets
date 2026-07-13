@@ -1,2 +1,46 @@
 @model EventStorefrontViewModel
-@{Layout=null;}<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>@Model.Settings.StorefrontTitle</title><style>:root{--a:@Model.Settings.AccentColor}*{box-sizing:border-box}body{margin:0;background:#fff7ed;color:#292018;font:16px/1.5 system-ui}.shell{max-width:1100px;margin:auto;padding:45px 24px}.hero{text-align:center;margin-bottom:45px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px}.card{background:#fff;border:1px solid #fed7aa;border-radius:22px;overflow:hidden;box-shadow:0 18px 50px #7c2d1210}.banner{width:100%;aspect-ratio:16/9;object-fit:cover;background:#ffedd5}.content{padding:25px}.btn{display:inline-block;background:var(--a);color:#fff;text-decoration:none;padding:11px 18px;border-radius:10px;font-weight:750}.meta{color:#7c6655}.promo{text-align:center;color:#8a7565;margin-top:50px}</style></head><body><main class="shell"><header class="hero">@if(Model.Settings.LogoUrl is not null){<img src="@Model.Settings.LogoUrl" style="max-height:65px" alt="">}<h1>@Model.Settings.StorefrontTitle</h1><p>@Model.Settings.StorefrontDescription</p></header><section class="grid">@foreach(var e in Model.Events){<article class="card">@if(e.BannerUrl is not null){<img class="banner" src="@e.BannerUrl" alt="">}<div class="content"><h2>@e.Name</h2><p class="meta">@e.StartsAt.ToString("ddd, dd MMM yyyy · HH:mm")<br>@e.VenueName</p><p>@e.Description</p><a class="btn" asp-action="Event" asp-route-storeId="@Model.StoreId" asp-route-eventId="@e.Slug">Tickets</a></div></article>}</section>@if(Model.Settings.ShowMakePayPromotion){<footer class="promo">@Model.Settings.PromotionText</footer>}</main></body></html>
+@{ Layout = null; }
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>@Model.Settings.StorefrontTitle</title>
+    <partial name="~/Views/EventTickets/Public/_Theme.cshtml" model="Model.Settings" />
+    <style>
+        .event-directory{max-width:1180px;margin:auto;padding:70px 24px}.event-directory-header{max-width:760px;margin-bottom:44px}.event-directory-logo{max-height:64px;max-width:220px;margin-bottom:28px}.event-directory h1{font-size:clamp(2.6rem,6vw,5.8rem);line-height:.95;letter-spacing:-.055em;margin:0;text-transform:uppercase}.event-directory-lead{font-size:1.1rem;color:var(--et-muted);max-width:640px}.event-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:24px}.event-card{border:1px solid var(--et-border);border-radius:18px;overflow:hidden;background:var(--et-surface)}.event-card img{width:100%;aspect-ratio:16/10;object-fit:cover;background:var(--et-accent)}.event-card-content{padding:24px}.event-card h2{margin:0 0 8px}.event-card-meta{color:var(--et-muted);margin:0 0 14px}.event-card-copy{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}.event-empty{padding:34px;border:1px dashed var(--et-border);border-radius:16px;color:var(--et-muted)}
+    </style>
+</head>
+<body class="et-public">
+<main class="event-directory">
+    <header class="event-directory-header">
+        @if (!string.IsNullOrWhiteSpace(Model.Settings.LogoUrl)) { <img class="event-directory-logo" src="@Model.Settings.LogoUrl" alt="@Model.Settings.StorefrontTitle"> }
+        <p class="et-eyebrow">MakePay event tickets</p>
+        <h1>@Model.Settings.StorefrontTitle</h1>
+        <p class="event-directory-lead">@Model.Settings.StorefrontDescription</p>
+    </header>
+    @if (Model.Events.Count == 0)
+    {
+        <div class="event-empty">There are no published events right now.</div>
+    }
+    else
+    {
+        <section class="event-grid">
+            @foreach (var item in Model.Events)
+            {
+                <article class="event-card">
+                    @if (!string.IsNullOrWhiteSpace(item.BannerUrl ?? Model.Settings.HeroImageUrl)) { <img src="@(item.BannerUrl ?? Model.Settings.HeroImageUrl)" alt=""> }
+                    <div class="event-card-content">
+                        <h2>@item.Name</h2>
+                        <p class="event-card-meta">@item.StartsAt.ToString("ddd, dd MMM yyyy · HH:mm")<br>@item.VenueName</p>
+                        <p class="event-card-copy">@item.Description</p>
+                        <a class="et-primary" asp-action="Event" asp-route-storeId="@Model.StoreId" asp-route-eventId="@item.Slug">View tickets</a>
+                    </div>
+                </article>
+            }
+        </section>
+    }
+    <partial name="~/Views/EventTickets/Public/_Footer.cshtml" model="Model.Settings" />
+</main>
+</body>
+</html>

@@ -1,0 +1,8 @@
+@model TicketCheckoutPageViewModel
+@if (Model.Settings.ShowCountdown && Model.Order.Status == TicketOrderStatus.Pending)
+{
+    <div class="et-timer" data-et-expiry="@Model.Order.ReservationExpiresAt.ToString("O")"><strong>--:--</strong> left to secure your tickets</div>
+    <script>
+        (()=>{const bar=document.querySelector('[data-et-expiry]');if(!bar)return;const value=bar.querySelector('strong'),end=Date.parse(bar.dataset.etExpiry);let timer=null;const tick=()=>{const left=Math.max(0,Math.ceil((end-Date.now())/1000)),minutes=Math.floor(left/60),seconds=left%60;value.textContent=`${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;if(left===0){bar.lastChild.textContent=' session ended';document.querySelectorAll('[data-et-requires-session]').forEach(control=>{control.setAttribute('aria-disabled','true');control.classList.add('is-disabled');if(control.tagName==='A')control.removeAttribute('href');else control.disabled=true});if(timer)clearInterval(timer)}};tick();timer=setInterval(tick,1000)})();
+    </script>
+}

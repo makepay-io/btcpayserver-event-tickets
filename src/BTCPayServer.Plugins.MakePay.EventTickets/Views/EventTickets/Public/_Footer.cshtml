@@ -1,0 +1,8 @@
+@model EventTicketSettings
+<footer class="et-footer">
+    <div>@Model.FooterText</div>
+    @if (Model.ShowMakePayPromotion)
+    {
+        <div class="et-promotion">@Model.PromotionText <a href="https://makepay.io" target="_blank" rel="noopener">Enable multicurrency</a></div>
+    }
+</footer>

@@ -19,17 +19,49 @@ public sealed class EventTicketRepository(StoreRepository stores)
     });
     public async Task<IReadOnlyList<TicketOrder>> GetOrders(string storeId) => (await stores.GetSettingAsync<TicketOrderCollection>(storeId, EventTicketsPlugin.OrdersKey) ?? new()).Orders.Values.OrderByDescending(o => o.CreatedAt).ToList();
     public async Task<TicketOrder?> GetOrder(string storeId, string id) => (await stores.GetSettingAsync<TicketOrderCollection>(storeId, EventTicketsPlugin.OrdersKey) ?? new()).Orders.GetValueOrDefault(id);
-    public async Task<TicketOrder?> TryCreateOrder(string storeId, TicketEvent item, TicketType type, int quantity, string email, string buyerName)
+    public async Task<TicketOrder?> TryCreateOrder(string storeId, TicketEvent item, EventTicketSettings settings, IReadOnlyList<TicketOrderLine> lines)
     {
         TicketOrder? result = null;
         await Mutate<TicketOrderCollection>(storeId, EventTicketsPlugin.OrdersKey, orders =>
         {
-            var reserved = orders.Orders.Values.Where(o => o.EventId == item.Id && o.TicketTypeId == type.Id && o.Status != TicketOrderStatus.Cancelled).Sum(o => o.Quantity);
-            if (quantity < 1 || quantity > type.MaxPerOrder || type.Capacity > 0 && reserved + quantity > type.Capacity) return;
-            result = new() { StoreId = storeId, EventId = item.Id, TicketTypeId = type.Id, Quantity = quantity, BuyerEmail = email, BuyerName = buyerName };
+            var now = DateTimeOffset.UtcNow;
+            foreach (var stale in orders.Orders.Values.Where(order => order.Status == TicketOrderStatus.Pending && order.ReservationExpiresAt <= now)) stale.Status = TicketOrderStatus.Cancelled;
+            if (lines.Count == 0) return;
+            foreach (var line in lines)
+            {
+                var type = item.TicketTypes.FirstOrDefault(ticketType => ticketType.Id == line.TicketTypeId && ticketType.Active);
+                if (type is null || line.Quantity < 1 || line.Quantity > type.MaxPerOrder) return;
+                var reserved = orders.Orders.Values
+                    .Where(order => order.EventId == item.Id && order.Status != TicketOrderStatus.Cancelled)
+                    .SelectMany(order => TicketCheckoutService.ResolveLines(order, item))
+                    .Where(existing => existing.TicketTypeId == type.Id)
+                    .Sum(existing => existing.Quantity);
+                if (type.Capacity > 0 && reserved + line.Quantity > type.Capacity) return;
+            }
+
+            result = new()
+            {
+                StoreId = storeId,
+                EventId = item.Id,
+                Lines = lines.Select(line => new TicketOrderLine { TicketTypeId = line.TicketTypeId, Quantity = line.Quantity, UnitPrice = line.UnitPrice }).ToList(),
+                Currency = settings.Currency.ToUpperInvariant(),
+                ReservationExpiresAt = now.AddMinutes(settings.CheckoutMinutes)
+            };
+            TicketCheckoutService.Recalculate(result);
             orders.Orders[result.Id] = result;
         });
         return result;
+    }
+
+    public async Task<TicketOrder?> TryCreateOrder(string storeId, TicketEvent item, TicketType type, int quantity, string email, string buyerName)
+    {
+        var settings = await GetSettings(storeId);
+        var order = await TryCreateOrder(storeId, item, settings, [new TicketOrderLine { TicketTypeId = type.Id, Quantity = quantity, UnitPrice = type.Price }]);
+        if (order is null) return null;
+        order.BuyerEmail = email;
+        order.BuyerName = buyerName;
+        await SaveOrder(storeId, order);
+        return order;
     }
     public async Task SaveOrder(string storeId, TicketOrder order) => await Mutate<TicketOrderCollection>(storeId, EventTicketsPlugin.OrdersKey, value => value.Orders[order.Id] = order);
     public async Task CancelOrder(string storeId, string orderId) => await Mutate<TicketOrderCollection>(storeId, EventTicketsPlugin.OrdersKey, value => { if (value.Orders.TryGetValue(orderId, out var order) && order.Status == TicketOrderStatus.Pending) order.Status = TicketOrderStatus.Cancelled; });
@@ -51,7 +83,11 @@ public sealed class EventTicketRepository(StoreRepository stores)
     }
     public async Task<Dictionary<string, int?>> GetRemaining(string storeId, TicketEvent item)
     {
-        var orders = await GetOrders(storeId); return item.TicketTypes.ToDictionary(t => t.Id, t => t.Capacity == 0 ? (int?)null : Math.Max(0, t.Capacity - orders.Where(o => o.EventId == item.Id && o.TicketTypeId == t.Id && o.Status != TicketOrderStatus.Cancelled).Sum(o => o.Quantity)));
+        var now = DateTimeOffset.UtcNow;
+        var orders = (await GetOrders(storeId)).Where(order => order.EventId == item.Id && order.Status != TicketOrderStatus.Cancelled && (order.Status == TicketOrderStatus.Paid || order.ReservationExpiresAt > now)).ToList();
+        return item.TicketTypes.ToDictionary(type => type.Id, type => type.Capacity == 0
+            ? (int?)null
+            : Math.Max(0, type.Capacity - orders.SelectMany(order => TicketCheckoutService.ResolveLines(order, item)).Where(line => line.TicketTypeId == type.Id).Sum(line => line.Quantity)));
     }
     private async Task Mutate<T>(string storeId, string key, Action<T> change) where T : class, new()
     {

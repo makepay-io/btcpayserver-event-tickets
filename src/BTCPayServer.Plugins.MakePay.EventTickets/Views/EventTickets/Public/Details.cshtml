@@ -1,0 +1,82 @@
+@model TicketCheckoutPageViewModel
+@{ Layout = null; var attendeeIndex = 0; }
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Checkout · @Model.Event.Name</title>
+    <partial name="~/Views/EventTickets/Public/_Theme.cshtml" model="Model.Settings" />
+</head>
+<body class="et-public">
+<partial name="~/Views/EventTickets/Public/_Countdown.cshtml" model="Model" />
+<main class="et-checkout-shell">
+    <partial name="~/Views/EventTickets/Public/_Stepper.cshtml" model="Model.Step" />
+    @if (Model.Order.Status == TicketOrderStatus.Cancelled || Model.Order.ReservationExpiresAt <= DateTimeOffset.UtcNow)
+    {
+        <section class="et-pending"><h1>This reservation has ended</h1><p class="et-section-copy">Your tickets were released before checkout was completed.</p><a class="et-primary" asp-action="Event" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug">Choose tickets</a></section>
+    }
+    else
+    {
+        <form method="post" asp-action="CreatePayment" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
+            <div asp-validation-summary="All" class="et-alert"></div>
+            <section>
+                <h1 class="et-section-heading">Billing details</h1>
+                <p class="et-section-copy">We use this information for your payment receipt and ticket delivery.</p>
+                <div class="et-form-card et-grid-2">
+                    <div class="et-field"><label for="buyer-first">First name <span class="et-required">*</span></label><input class="et-input" id="buyer-first" name="BuyerFirstName" value="@Model.Input.BuyerFirstName" autocomplete="given-name" required></div>
+                    <div class="et-field"><label for="buyer-last">Last name <span class="et-required">*</span></label><input class="et-input" id="buyer-last" name="BuyerLastName" value="@Model.Input.BuyerLastName" autocomplete="family-name" required></div>
+                    <div class="et-field"><label for="buyer-email">Email <span class="et-required">*</span></label><input class="et-input" id="buyer-email" name="BuyerEmail" value="@Model.Input.BuyerEmail" type="email" autocomplete="email" required></div>
+                    <div class="et-field"><label for="buyer-phone">Phone number @if(Model.Settings.RequirePhone){<span class="et-required">*</span>}</label><input class="et-input" id="buyer-phone" name="BuyerPhone" value="@Model.Input.BuyerPhone" type="tel" autocomplete="tel" required="@(Model.Settings.RequirePhone ? "required" : null)"></div>
+                    <div class="et-field"><label for="buyer-country">Country @if(Model.Settings.RequireCountry){<span class="et-required">*</span>}</label><input class="et-input" id="buyer-country" name="BuyerCountry" value="@Model.Input.BuyerCountry" autocomplete="country-name" required="@(Model.Settings.RequireCountry ? "required" : null)"></div>
+                    @if (Model.Settings.CollectCompany) { <div class="et-field"><label for="buyer-company">Company</label><input class="et-input" id="buyer-company" name="BuyerCompany" value="@Model.Input.BuyerCompany" autocomplete="organization"></div> }
+                </div>
+            </section>
+            <section>
+                <h2 class="et-section-heading">Attendee details</h2>
+                <p class="et-section-copy">Add the name shown on each ticket.</p>
+                @if (!string.IsNullOrWhiteSpace(Model.Settings.AttendeeNotice)) { <div class="et-attendee-notice">@Model.Settings.AttendeeNotice</div> }
+                <label class="et-check"><input type="checkbox" id="copy-buyer"><span>Use billing details for attendee 1</span></label>
+                @foreach (var line in Model.Lines)
+                {
+                    <div class="et-attendee-group">
+                        <h3>@line.TicketType.Name</h3>
+                        @for (var localIndex = 0; localIndex < line.Line.Quantity; localIndex++)
+                        {
+                            var input = Model.Input.Attendees.ElementAtOrDefault(attendeeIndex) ?? new TicketAttendeeInput { TicketTypeId = line.TicketType.Id };
+                            <div class="et-attendee-card" data-attendee="@attendeeIndex">
+                                <h4>Attendee @(localIndex + 1)</h4>
+                                <p class="et-help">Ticket @(@attendeeIndex + 1) of @Model.Order.Quantity</p>
+                                <input type="hidden" name="Attendees[@attendeeIndex].TicketTypeId" value="@line.TicketType.Id">
+                                <div class="et-grid-2">
+                                    <div class="et-field"><label for="attendee-@attendeeIndex-first">First name <span class="et-required">*</span></label><input class="et-input" id="attendee-@attendeeIndex-first" name="Attendees[@attendeeIndex].FirstName" value="@input.FirstName" required></div>
+                                    <div class="et-field"><label for="attendee-@attendeeIndex-last">Last name <span class="et-required">*</span></label><input class="et-input" id="attendee-@attendeeIndex-last" name="Attendees[@attendeeIndex].LastName" value="@input.LastName" required></div>
+                                    <div class="et-field"><label for="attendee-@attendeeIndex-nickname">Nickname</label><span class="et-help">Optional name shown on the ticket.</span><input class="et-input" id="attendee-@attendeeIndex-nickname" name="Attendees[@attendeeIndex].Nickname" value="@input.Nickname"></div>
+                                    <div class="et-field"><label for="attendee-@attendeeIndex-email">Email <span class="et-required">*</span></label><input class="et-input" id="attendee-@attendeeIndex-email" name="Attendees[@attendeeIndex].Email" value="@input.Email" type="email" required></div>
+                                    <div class="et-field"><label for="attendee-@attendeeIndex-phone">Phone</label><input class="et-input" id="attendee-@attendeeIndex-phone" name="Attendees[@attendeeIndex].Phone" value="@input.Phone" type="tel"></div>
+                                    <div class="et-field"><label for="attendee-@attendeeIndex-country">Country</label><input class="et-input" id="attendee-@attendeeIndex-country" name="Attendees[@attendeeIndex].Country" value="@input.Country"></div>
+                                    @if (Model.Settings.CollectCompany) { <div class="et-field"><label for="attendee-@attendeeIndex-company">Company</label><input class="et-input" id="attendee-@attendeeIndex-company" name="Attendees[@attendeeIndex].Company" value="@input.Company"></div> }
+                                </div>
+                            </div>
+                            attendeeIndex++;
+                        }
+                    </div>
+                }
+            </section>
+            <section class="et-form-card">
+                <label class="et-check">
+                    @if (Model.Input.AcceptTerms) { <input type="checkbox" name="AcceptTerms" value="true" checked required> } else { <input type="checkbox" name="AcceptTerms" value="true" required> }
+                    <span>I have read and agree to @if(!string.IsNullOrWhiteSpace(Model.Settings.PrivacyUrl)){<a href="@Model.Settings.PrivacyUrl" target="_blank" rel="noopener">Privacy Policy</a>}else{<span>the privacy notice</span>} and @if(!string.IsNullOrWhiteSpace(Model.Settings.TermsUrl)){<a href="@Model.Settings.TermsUrl" target="_blank" rel="noopener">Terms &amp; Conditions</a>}else{<span>the terms and conditions</span>}.</span>
+                </label>
+                <button class="et-primary et-continue" type="submit" data-et-requires-session>Proceed to payment · @Model.Order.Total.ToString("0.##") @Model.Order.Currency</button>
+            </section>
+            <div class="et-actions"><a class="et-secondary" asp-action="Cart" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">Back to cart</a></div>
+        </form>
+        <partial name="~/Views/EventTickets/Public/_Footer.cshtml" model="Model.Settings" />
+    }
+</main>
+<script>
+(()=>{const toggle=document.getElementById('copy-buyer');if(!toggle)return;toggle.addEventListener('change',()=>{if(!toggle.checked)return;const pairs=[['buyer-first','attendee-0-first'],['buyer-last','attendee-0-last'],['buyer-email','attendee-0-email'],['buyer-phone','attendee-0-phone'],['buyer-country','attendee-0-country']];pairs.forEach(([source,target])=>{const from=document.getElementById(source),to=document.getElementById(target);if(from&&to)to.value=from.value})})})();
+</script>
+</body>
+</html>
