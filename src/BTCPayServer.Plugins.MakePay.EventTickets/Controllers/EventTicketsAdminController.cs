@@ -49,6 +49,18 @@ public sealed class EventTicketsAdminController(StoreRepository stores, EventTic
     [HttpPost("settings")]
     public async Task<IActionResult> SaveSettings(string storeId, EventTicketSettings posted, string? resendApiKey, IFormFile? appleP12, string? appleP12Password, string? googleServiceAccountJson, CancellationToken cancellationToken)
     {
+        posted.GoogleTagManagerContainerId = posted.GoogleTagManagerContainerId?.Trim().ToUpperInvariant();
+        posted.GoogleAnalyticsMeasurementId = posted.GoogleAnalyticsMeasurementId?.Trim().ToUpperInvariant();
+        // Inactive provider fields are retained for convenient switching, but must not
+        // prevent saving the selected provider (or the disabled dataLayer-only mode).
+        if (posted.AnalyticsProvider != AnalyticsProvider.GoogleTagManager)
+            ModelState.Remove(nameof(posted.GoogleTagManagerContainerId));
+        if (posted.AnalyticsProvider != AnalyticsProvider.GoogleAnalytics)
+            ModelState.Remove(nameof(posted.GoogleAnalyticsMeasurementId));
+        if (posted.AnalyticsProvider == AnalyticsProvider.GoogleTagManager && string.IsNullOrWhiteSpace(posted.GoogleTagManagerContainerId))
+            ModelState.AddModelError(nameof(posted.GoogleTagManagerContainerId), "A Google Tag Manager container ID is required for this provider.");
+        if (posted.AnalyticsProvider == AnalyticsProvider.GoogleAnalytics && string.IsNullOrWhiteSpace(posted.GoogleAnalyticsMeasurementId))
+            ModelState.AddModelError(nameof(posted.GoogleAnalyticsMeasurementId), "A GA4 measurement ID is required for this provider.");
         var existing = await repository.GetSettings(storeId); posted.ProtectedResendApiKey = string.IsNullOrWhiteSpace(resendApiKey) ? existing.ProtectedResendApiKey : secrets.Protect(resendApiKey);
         posted.ProtectedAppleP12 = existing.ProtectedAppleP12; posted.ProtectedAppleP12Password = existing.ProtectedAppleP12Password; posted.ProtectedGoogleServiceAccountJson = string.IsNullOrWhiteSpace(googleServiceAccountJson) ? existing.ProtectedGoogleServiceAccountJson : secrets.Protect(googleServiceAccountJson);
         if (appleP12 is not null) { if (appleP12.Length > 1024 * 1024) ModelState.AddModelError("appleP12", "Apple certificate must be smaller than 1 MB."); else { using var memory = new MemoryStream(); await appleP12.CopyToAsync(memory, cancellationToken); posted.ProtectedAppleP12 = secrets.Protect(Convert.ToBase64String(memory.ToArray())); posted.ProtectedAppleP12Password = secrets.Protect(appleP12Password ?? ""); } }

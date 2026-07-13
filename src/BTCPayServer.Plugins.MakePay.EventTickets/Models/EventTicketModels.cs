@@ -4,6 +4,12 @@ using System.ComponentModel.DataAnnotations;
 namespace BTCPayServer.Plugins.MakePay.EventTickets.Models;
 
 public enum TicketEmailProvider { BtcpaySmtp, Resend }
+public enum AnalyticsProvider
+{
+    [Display(Name = "Disabled (dataLayer only)")] Disabled,
+    [Display(Name = "Google Tag Manager")] GoogleTagManager,
+    [Display(Name = "Google Analytics 4")] GoogleAnalytics
+}
 public enum TicketFontStyle
 {
     [Display(Name = "System sans")] System,
@@ -31,6 +37,14 @@ public sealed class EventTicketSettings
     [StringLength(1000)] public string FooterText { get; set; } = "Your order is processed securely by this BTCPay Server.";
     [Url, StringLength(500)] public string? PrivacyUrl { get; set; }
     [Url, StringLength(500)] public string? TermsUrl { get; set; }
+
+    public AnalyticsProvider AnalyticsProvider { get; set; }
+    [StringLength(40), RegularExpression("(?i)^\\s*GTM-[A-Z0-9]+\\s*$", ErrorMessage = "Use a valid Google Tag Manager container ID such as GTM-ABC123.")]
+    public string? GoogleTagManagerContainerId { get; set; }
+    [StringLength(40), RegularExpression("(?i)^\\s*G-[A-Z0-9]+\\s*$", ErrorMessage = "Use a valid GA4 measurement ID such as G-ABC123DEF4.")]
+    public string? GoogleAnalyticsMeasurementId { get; set; }
+    public bool RequireAnalyticsConsent { get; set; } = true;
+    public bool RespectDoNotTrack { get; set; } = true;
 
     [RegularExpression("^#[0-9a-fA-F]{6}$")] public string AccentColor { get; set; } = "#155EEF";
     [RegularExpression("^#[0-9a-fA-F]{6}$")] public string AccentTextColor { get; set; } = "#FFFFFF";
@@ -231,6 +245,15 @@ public sealed class EventTicketsDashboardViewModel
 
 public sealed class EventStorefrontViewModel { public required string StoreId { get; init; } public required EventTicketSettings Settings { get; init; } public required IReadOnlyList<TicketEvent> Events { get; init; } }
 public sealed class EventDetailViewModel { public required string StoreId { get; init; } public required EventTicketSettings Settings { get; init; } public required TicketEvent Event { get; init; } public required Dictionary<string, int?> Remaining { get; init; } public bool PosMode { get; init; } }
+
+public sealed class EventTicketAnalyticsContext
+{
+    public required EventTicketSettings Settings { get; init; }
+    public required string StoreId { get; init; }
+    public required string PageType { get; init; }
+    public string? EventId { get; init; }
+    public string? EventSlug { get; init; }
+}
 
 public sealed class TicketCheckoutPageViewModel
 {

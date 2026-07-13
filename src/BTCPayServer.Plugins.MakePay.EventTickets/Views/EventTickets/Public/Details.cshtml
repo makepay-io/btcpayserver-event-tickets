@@ -1,5 +1,5 @@
 @model TicketCheckoutPageViewModel
-@{ Layout = null; var attendeeIndex = 0; }
+@{ Layout = null; var attendeeIndex = 0; var analyticsEcommerce = TicketAnalytics.ForOrder(Model.Order, Model.Event, Model.Lines); var analyticsOrderId = TicketAnalytics.AnalyticsTransactionId(Model.Order); var analyticsContext = new EventTicketAnalyticsContext { Settings = Model.Settings, StoreId = Model.StoreId, PageType = "checkout_details", EventId = Model.Event.Id, EventSlug = Model.Event.Slug }; }
 <!doctype html>
 <html lang="en">
 <head>
@@ -9,6 +9,7 @@
     <partial name="~/Views/EventTickets/Public/_Theme.cshtml" model="Model.Settings" />
 </head>
 <body class="et-public">
+<partial name="~/Views/EventTickets/Public/_Analytics.cshtml" model="analyticsContext" />
 <partial name="~/Views/EventTickets/Public/_Countdown.cshtml" model="Model" />
 <main class="et-checkout-shell">
     <partial name="~/Views/EventTickets/Public/_Stepper.cshtml" model="Model.Step" />
@@ -76,7 +77,7 @@
             <section class="et-form-card">
                 <label class="et-check">
                     @if (Model.Input.AcceptTerms) { <input type="checkbox" name="AcceptTerms" value="true" checked required> } else { <input type="checkbox" name="AcceptTerms" value="true" required> }
-                    <span>I have read and agree to @if(!string.IsNullOrWhiteSpace(Model.Settings.PrivacyUrl)){<a href="@Model.Settings.PrivacyUrl" target="_blank" rel="noopener">Privacy Policy</a>}else{<span>the privacy notice</span>} and @if(!string.IsNullOrWhiteSpace(Model.Settings.TermsUrl)){<a href="@Model.Settings.TermsUrl" target="_blank" rel="noopener">Terms &amp; Conditions</a>}else{<span>the terms and conditions</span>}.</span>
+                    <span>I have read and agree to @if(!string.IsNullOrWhiteSpace(Model.Settings.PrivacyUrl)){<a href="@Model.Settings.PrivacyUrl" target="_blank" rel="noopener noreferrer">Privacy Policy</a>}else{<span>the privacy notice</span>} and @if(!string.IsNullOrWhiteSpace(Model.Settings.TermsUrl)){<a href="@Model.Settings.TermsUrl" target="_blank" rel="noopener noreferrer">Terms &amp; Conditions</a>}else{<span>the terms and conditions</span>}.</span>
                 </label>
                 <button class="et-primary et-continue" type="submit" data-et-requires-session>Proceed to payment · @Model.Order.Total.ToString("0.##") @Model.Order.Currency</button>
             </section>
@@ -88,5 +89,11 @@
 <script>
 (()=>{const form=document.querySelector('[data-et-checkout-form]');if(!form)return;const storageKey=@Html.Raw(System.Text.Json.JsonSerializer.Serialize($"makepay:event-tickets:checkout:v1:{Model.StoreId}:{Model.Event.Id}")),maxAge=30*24*60*60*1000,buyer=/^Buyer(?:FirstName|LastName|Email|Phone|Country|Company)$/,attendee=/^Attendees\[\d+\]\.(?:FirstName|LastName|Nickname|Email|Phone|Country|Company)$/;const fields=()=>Array.from(form.elements).filter(field=>field instanceof HTMLInputElement&&(buyer.test(field.name)||attendee.test(field.name)));let saved=null;try{saved=JSON.parse(localStorage.getItem(storageKey)||'null');if(saved&&Date.now()-saved.updatedAt>maxAge){localStorage.removeItem(storageKey);saved=null}}catch{saved=null}if(saved?.values)fields().forEach(field=>{if(!field.value&&typeof saved.values[field.name]==='string')field.value=saved.values[field.name]});const persist=()=>{const values={};fields().forEach(field=>values[field.name]=field.value);try{localStorage.setItem(storageKey,JSON.stringify({updatedAt:Date.now(),values}))}catch{}};let timer;form.addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(persist,150)});form.addEventListener('change',persist);form.addEventListener('submit',persist);addEventListener('pagehide',persist);const toggle=document.getElementById('copy-buyer');if(!toggle)return;toggle.addEventListener('change',()=>{if(!toggle.checked)return;const pairs=[['buyer-first','attendee-0-first'],['buyer-last','attendee-0-last'],['buyer-email','attendee-0-email'],['buyer-phone','attendee-0-phone'],['buyer-country','attendee-0-country']];pairs.forEach(([source,target])=>{const from=document.getElementById(source),to=document.getElementById(target);if(from&&to)to.value=from.value});persist()})})();
 </script>
+@if (Model.Order.Status == TicketOrderStatus.Pending)
+{
+    <script>
+    (()=>{const analytics=window.makePayAnalytics,ecommerce=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(analyticsEcommerce)),analyticsOrderId=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(analyticsOrderId)),send=()=>analytics?.trackOnce('begin_checkout',analyticsOrderId,{ecommerce});send();document.querySelector('[data-et-checkout-form]')?.addEventListener('submit',send)})();
+    </script>
+}
 </body>
 </html>

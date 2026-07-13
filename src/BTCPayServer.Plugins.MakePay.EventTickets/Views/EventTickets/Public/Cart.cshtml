@@ -1,5 +1,5 @@
 @model TicketCheckoutPageViewModel
-@{ Layout = null; }
+@{ Layout = null; var analyticsEcommerce = TicketAnalytics.ForOrder(Model.Order, Model.Event, Model.Lines); var analyticsOrderId = TicketAnalytics.AnalyticsTransactionId(Model.Order); var analyticsContext = new EventTicketAnalyticsContext { Settings = Model.Settings, StoreId = Model.StoreId, PageType = "cart", EventId = Model.Event.Id, EventSlug = Model.Event.Slug }; }
 <!doctype html>
 <html lang="en">
 <head>
@@ -9,6 +9,7 @@
     <partial name="~/Views/EventTickets/Public/_Theme.cshtml" model="Model.Settings" />
 </head>
 <body class="et-public">
+<partial name="~/Views/EventTickets/Public/_Analytics.cshtml" model="analyticsContext" />
 <partial name="~/Views/EventTickets/Public/_Countdown.cshtml" model="Model" />
 <main class="et-checkout-shell">
     <partial name="~/Views/EventTickets/Public/_Stepper.cshtml" model="Model.Step" />
@@ -58,11 +59,17 @@
             </div>
             <div class="et-actions">
                 <a class="et-secondary" asp-action="@(Model.Order.PosMode ? "Pos" : "Event")" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug">Back</a>
-                <a class="et-primary" data-et-requires-session asp-action="Details" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">Continue</a>
+                <a class="et-primary" data-et-requires-session data-begin-checkout asp-action="Details" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">Continue</a>
             </div>
         </section>
         <partial name="~/Views/EventTickets/Public/_Footer.cshtml" model="Model.Settings" />
     }
 </main>
+@if (Model.Order.Status == TicketOrderStatus.Pending)
+{
+    <script>
+    (()=>{const ecommerce=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(analyticsEcommerce)),analytics=window.makePayAnalytics,analyticsOrderId=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(analyticsOrderId));analytics?.trackOnce('add_to_cart',analyticsOrderId,{ecommerce},'local');analytics?.track('view_cart',{ecommerce});document.querySelector('[data-begin-checkout]')?.addEventListener('click',()=>analytics?.trackOnce('begin_checkout',analyticsOrderId,{ecommerce}))})();
+    </script>
+}
 </body>
 </html>
