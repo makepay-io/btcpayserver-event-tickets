@@ -12,12 +12,12 @@ namespace BTCPayServer.Plugins.MakePay.EventTickets.Services;
 
 public sealed class TicketEmailService(HttpClient http, EmailSenderFactory emailFactory, TicketCodeService secrets, TicketDocumentService documents, ILogger<TicketEmailService> logger)
 {
-    public async Task Send(string storeId, EventTicketSettings settings, TicketEvent item, TicketType type, TicketOrder order, IReadOnlyList<IssuedTicket> tickets, string orderUrl, CancellationToken cancellationToken)
+    public async Task Send(string storeId, EventTicketSettings settings, TicketEvent item, TicketOrder order, IReadOnlyList<IssuedTicket> tickets, string orderUrl, CancellationToken cancellationToken)
     {
         string E(string value) => HtmlEncoder.Default.Encode(value);
         var html = settings.EmailHtml.Replace("{EventName}", E(item.Name), StringComparison.Ordinal).Replace("{EventDate}", E(item.StartsAt.ToString("u")), StringComparison.Ordinal).Replace("{Venue}", E(item.VenueName), StringComparison.Ordinal).Replace("{OrderUrl}", E(orderUrl), StringComparison.Ordinal);
         var subject = settings.EmailSubject.Replace("{EventName}", item.Name, StringComparison.Ordinal);
-        var pdf = settings.AttachPdf ? documents.CreatePdf(item, type, order, tickets) : null;
+        var pdf = settings.AttachPdf ? documents.CreatePdf(item, order, tickets, settings) : null;
         if (settings.EmailProvider == TicketEmailProvider.Resend) await SendResend(settings, order.BuyerEmail, subject, html, pdf, cancellationToken); else await SendSmtp(storeId, order.BuyerEmail, subject, html, pdf, cancellationToken);
     }
 

@@ -4,13 +4,16 @@ A self-hosted event storefront, ticket delivery system, POS, and QR check-in wor
 
 ## Features
 
-- Branded responsive event shop, multiple ticket types, capacity controls, quantity limits, draft/published events, and an event-specific POS view.
-- Atomic inventory reservations and automatic release when invoices expire or become invalid.
+- Branded responsive event shop with editable logo, hero artwork, colors, typography, copy, and a fullscreen live editor covering every checkout state.
+- Multi-ticket cart, promotional pricing, buyer and attendee details, reservation countdowns, and the official BTCPay JavaScript modal (`/modal/btcpay.js` + `showInvoice`) with invoices created server-side.
+- Protected post-payment order pages with downloadable multi-page PDF tickets, one real QR code per attendee, and the same secure link delivered by email.
+- Multiple ticket types, capacity controls, quantity limits, draft/published events, and an event-specific POS view.
+- Atomic inventory reservations and automatic release when reservations or invoices expire or become invalid.
 - Cryptographically random ticket codes stored as one-way hashes with encrypted recoverable values.
 - Browser camera QR scanner using `BarcodeDetector`, manual scanner input fallback, atomic first check-in, and duplicate/revoked responses.
 - Adjustable HTML email through Resend or BTCPay store SMTP, with an attached standards-compliant PDF ticket document.
 - Apple Wallet `.pkpass` generation with merchant-provided Pass Type certificate and Google Wallet signed save links with a service account.
-- Buyer order page with QR tickets, downloadable PDF, and wallet buttons.
+- Configurable privacy/terms links, attendee notice, optional phone/country/company fields, confirmation copy, and Resend or SMTP delivery templates.
 - MakePay.io promotion area for decentralized acceptance of 90+ currencies.
 
 ## Wallet setup

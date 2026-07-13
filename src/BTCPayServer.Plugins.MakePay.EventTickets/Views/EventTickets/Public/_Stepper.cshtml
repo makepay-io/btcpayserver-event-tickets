@@ -1,0 +1,12 @@
+@model int
+@{ var labels = new[] { "Tickets", "Cart", "Checkout", "Payment" }; }
+<div class="et-step-label">Step @Model of 4</div>
+<nav class="et-stepper" aria-label="Checkout progress">
+    @for (var index = 1; index <= labels.Length; index++)
+    {
+        var state = index < Model ? "is-complete" : index == Model ? "is-active" : "";
+        <div class="et-step @state" aria-current="@(index == Model ? "step" : null)">
+            <span class="et-step-dot">@if (index < Model) { <img class="et-check-icon" src="~/imlegacy/checkmark.svg" alt=""> } else { @index }</span><span>@labels[index - 1]</span>
+        </div>
+    }
+</nav>

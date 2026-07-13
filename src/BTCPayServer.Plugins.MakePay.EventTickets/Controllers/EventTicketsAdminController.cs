@@ -40,14 +40,19 @@ public sealed class EventTicketsAdminController(StoreRepository stores, EventTic
         TempData.SetStatusMessageModel(new() { Severity = StatusMessageModel.StatusSeverity.Success, Message = "Event saved." }); return RedirectToAction(nameof(Index), new { storeId });
     }
     [HttpGet("settings")]
-    public async Task<IActionResult> Settings(string storeId) { if (await stores.FindStore(storeId) is null) return NotFound(); ViewData["StoreId"] = storeId; return View("~/Views/EventTickets/Settings.cshtml", await repository.GetSettings(storeId)); }
+    public async Task<IActionResult> Settings(string storeId)
+    {
+        if (await stores.FindStore(storeId) is null) return NotFound();
+        await SetSettingsViewData(storeId);
+        return View("~/Views/EventTickets/Settings.cshtml", await repository.GetSettings(storeId));
+    }
     [HttpPost("settings")]
     public async Task<IActionResult> SaveSettings(string storeId, EventTicketSettings posted, string? resendApiKey, IFormFile? appleP12, string? appleP12Password, string? googleServiceAccountJson, CancellationToken cancellationToken)
     {
         var existing = await repository.GetSettings(storeId); posted.ProtectedResendApiKey = string.IsNullOrWhiteSpace(resendApiKey) ? existing.ProtectedResendApiKey : secrets.Protect(resendApiKey);
         posted.ProtectedAppleP12 = existing.ProtectedAppleP12; posted.ProtectedAppleP12Password = existing.ProtectedAppleP12Password; posted.ProtectedGoogleServiceAccountJson = string.IsNullOrWhiteSpace(googleServiceAccountJson) ? existing.ProtectedGoogleServiceAccountJson : secrets.Protect(googleServiceAccountJson);
         if (appleP12 is not null) { if (appleP12.Length > 1024 * 1024) ModelState.AddModelError("appleP12", "Apple certificate must be smaller than 1 MB."); else { using var memory = new MemoryStream(); await appleP12.CopyToAsync(memory, cancellationToken); posted.ProtectedAppleP12 = secrets.Protect(Convert.ToBase64String(memory.ToArray())); posted.ProtectedAppleP12Password = secrets.Protect(appleP12Password ?? ""); } }
-        if (!ModelState.IsValid) { ViewData["StoreId"] = storeId; return View("~/Views/EventTickets/Settings.cshtml", posted); }
+        if (!ModelState.IsValid) { await SetSettingsViewData(storeId); return View("~/Views/EventTickets/Settings.cshtml", posted); }
         await repository.SaveSettings(storeId, posted); TempData.SetStatusMessageModel(new() { Severity = StatusMessageModel.StatusSeverity.Success, Message = "Event ticket settings saved." }); return RedirectToAction(nameof(Settings), new { storeId });
     }
     [HttpGet("scanner")]
@@ -58,4 +63,11 @@ public sealed class EventTicketsAdminController(StoreRepository stores, EventTic
         if (string.IsNullOrWhiteSpace(request.Code)) return BadRequest(new CheckInResult(false, "missing", null, null, null, null, "Scan or enter a ticket code.")); var result = await repository.CheckIn(storeId, request.Code, User.Identity?.Name ?? "BTCPay staff", request.Gate); return result.Success ? Ok(result) : Conflict(result);
     }
     public sealed record ScannerRequest(string Code, string? Gate);
+
+    private async Task SetSettingsViewData(string storeId)
+    {
+        ViewData["StoreId"] = storeId;
+        var previewEvent = (await repository.GetEvents(storeId)).FirstOrDefault(item => item.Published);
+        ViewData["PreviewEventUrl"] = previewEvent is null ? null : Url.Action("Event", "EventTicketsPublic", new { storeId, eventId = previewEvent.Slug });
+    }
 }

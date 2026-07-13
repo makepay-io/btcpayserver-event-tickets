@@ -1,0 +1,59 @@
+@model TicketCheckoutPageViewModel
+@{ Layout = null; }
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Cart · @Model.Event.Name</title>
+    <partial name="~/Views/EventTickets/Public/_Theme.cshtml" model="Model.Settings" />
+</head>
+<body class="et-public">
+<partial name="~/Views/EventTickets/Public/_Countdown.cshtml" model="Model" />
+<main class="et-checkout-shell">
+    <partial name="~/Views/EventTickets/Public/_Stepper.cshtml" model="Model.Step" />
+    @if (Model.Order.Status == TicketOrderStatus.Cancelled)
+    {
+        <section class="et-pending"><h1>This reservation has ended</h1><p class="et-section-copy">Your tickets were released. Start again to create a new payment session.</p><a class="et-primary" asp-action="Event" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug">Choose tickets</a></section>
+    }
+    else
+    {
+        <section>
+            <h1 class="et-section-heading">Review your cart</h1>
+            <p class="et-section-copy">Your ticket selection is reserved while the timer is running.</p>
+            <div class="et-card">
+                <div class="et-cart-head"><span>Ticket</span><span>Price</span><span>Qty</span><span>Total</span></div>
+                @foreach (var line in Model.Lines)
+                {
+                    <div class="et-cart-row">
+                        <strong>@line.TicketType.Name</strong>
+                        <span>@line.Line.UnitPrice.ToString("0.##") @Model.Order.Currency</span>
+                        <span>@line.Line.Quantity</span>
+                        <strong>@line.Total.ToString("0.##") @Model.Order.Currency</strong>
+                    </div>
+                }
+            </div>
+            @if (!string.IsNullOrWhiteSpace(Model.Settings.PromoCode) && Model.Settings.PromoPercent > 0)
+            {
+                <form class="et-promo-card" method="post" asp-action="ApplyPromotion" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
+                    <h3>Have a promotion code?</h3>
+                    <p>@Model.Settings.PromoDescription</p>
+                    @if (!string.IsNullOrWhiteSpace(Model.PromoMessage)) { <div class="@(Model.Order.PromoCode is null ? "et-validation" : "")">@Model.PromoMessage</div> }
+                    <div class="et-inline-form"><input class="et-input" name="promoCode" value="@Model.Order.PromoCode" autocomplete="off" placeholder="Enter your code"><button class="et-secondary" type="submit" data-et-requires-session>Apply</button></div>
+                </form>
+            }
+            <div class="et-summary">
+                <div class="et-summary-row"><span>Subtotal</span><strong>@Model.Order.Subtotal.ToString("0.##") @Model.Order.Currency</strong></div>
+                @if (Model.Order.DiscountAmount > 0) { <div class="et-summary-row"><span>Promotion @Model.Order.PromoCode</span><strong>−@Model.Order.DiscountAmount.ToString("0.##") @Model.Order.Currency</strong></div> }
+                <div class="et-summary-row total"><span>Total</span><strong>@Model.Order.Total.ToString("0.##") @Model.Order.Currency</strong></div>
+            </div>
+            <div class="et-actions">
+                <a class="et-secondary" asp-action="@(Model.Order.PosMode ? "Pos" : "Event")" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug">Back</a>
+                <a class="et-primary" data-et-requires-session asp-action="Details" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">Continue</a>
+            </div>
+        </section>
+        <partial name="~/Views/EventTickets/Public/_Footer.cshtml" model="Model.Settings" />
+    }
+</main>
+</body>
+</html>

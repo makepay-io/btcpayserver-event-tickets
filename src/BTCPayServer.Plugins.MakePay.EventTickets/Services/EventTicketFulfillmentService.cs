@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace BTCPayServer.Plugins.MakePay.EventTickets.Services;
 
-public sealed class EventTicketFulfillmentService(EventAggregator events, ILogger<EventTicketFulfillmentService> logger, EventTicketRepository repository, TicketCodeService codes, TicketEmailService email) : EventHostedServiceBase(events, logger)
+public sealed class EventTicketFulfillmentService(EventAggregator events, ILogger<EventTicketFulfillmentService> logger, EventTicketRepository repository, TicketCodeService codes, TicketCheckoutService checkout, TicketEmailService email) : EventHostedServiceBase(events, logger)
 {
     public const string TagPrefix = "MPET#";
     public static string Tag(string orderId) => TagPrefix + orderId;
@@ -20,12 +20,37 @@ public sealed class EventTicketFulfillmentService(EventAggregator events, ILogge
         var settings = await repository.GetSettings(invoiceEvent.Invoice.StoreId);
         var eligible = invoiceEvent.EventCode is InvoiceEventCode.Completed or InvoiceEventCode.Confirmed or InvoiceEventCode.MarkedCompleted || settings.DeliverOnProcessing && invoiceEvent.EventCode == InvoiceEventCode.PaidInFull; if (!eligible) return;
         var order = await repository.GetOrder(invoiceEvent.Invoice.StoreId, orderId); if (order is null || order.Status == TicketOrderStatus.Paid) return;
-        var item = await repository.GetEvent(order.StoreId, order.EventId); var type = item?.TicketTypes.FirstOrDefault(t => t.Id == order.TicketTypeId); if (item is null || type is null) return;
+        var item = await repository.GetEvent(order.StoreId, order.EventId); if (item is null) return;
+        var lines = TicketCheckoutService.ResolveLines(order, item); if (lines.Count == 0) return;
         var tickets = new List<IssuedTicket>();
-        for (var i = 0; i < order.Quantity; i++) { var created = codes.Create(); tickets.Add(new() { StoreId = order.StoreId, EventId = item.Id, TicketTypeId = type.Id, OrderId = order.Id, AttendeeName = order.Quantity == 1 ? order.BuyerName : $"{order.BuyerName} #{i + 1}", AttendeeEmail = order.BuyerEmail, CodeHash = created.Hash, ProtectedCode = created.Protected }); }
+        var attendeeQueues = order.Attendees.GroupBy(attendee => attendee.TicketTypeId).ToDictionary(group => group.Key, group => new Queue<TicketAttendee>(group), StringComparer.OrdinalIgnoreCase);
+        var sequence = 0;
+        foreach (var line in lines)
+        {
+            if (item.TicketTypes.All(type => type.Id != line.TicketTypeId)) continue;
+            for (var index = 0; index < line.Quantity; index++)
+            {
+                sequence++;
+                attendeeQueues.TryGetValue(line.TicketTypeId, out var queue);
+                var attendee = queue is { Count: > 0 } ? queue.Dequeue() : null;
+                var created = codes.Create();
+                tickets.Add(new IssuedTicket
+                {
+                    StoreId = order.StoreId,
+                    EventId = item.Id,
+                    TicketTypeId = line.TicketTypeId,
+                    OrderId = order.Id,
+                    AttendeeName = attendee is null ? (order.Quantity == 1 ? order.BuyerName : $"{order.BuyerName} #{sequence}") : (attendee.FirstName + " " + attendee.LastName).Trim(),
+                    AttendeeEmail = attendee?.Email ?? order.BuyerEmail,
+                    CodeHash = created.Hash,
+                    ProtectedCode = created.Protected
+                });
+            }
+        }
         await repository.SaveTickets(order.StoreId, tickets); order.TicketIds = tickets.Select(t => t.Id).ToList(); order.Status = TicketOrderStatus.Paid; order.PaidAt = DateTimeOffset.UtcNow; await repository.SaveOrder(order.StoreId, order);
-        var orderUrl = order.PublicBaseUrl.TrimEnd('/') + $"/stores/{order.StoreId}/events/order/{order.Id}";
-        try { await email.Send(order.StoreId, settings, item, type, order, tickets, orderUrl, cancellationToken); order.DeliverySent = true; await repository.SaveOrder(order.StoreId, order); }
+        var accessToken = checkout.GetAccessToken(order);
+        var orderUrl = order.PublicBaseUrl.TrimEnd('/') + $"/stores/{order.StoreId}/events/order/{order.Id}" + (accessToken is null ? "" : $"?accessToken={Uri.EscapeDataString(accessToken)}");
+        try { await email.Send(order.StoreId, settings, item, order, tickets, orderUrl, cancellationToken); order.DeliverySent = true; await repository.SaveOrder(order.StoreId, order); }
         catch (Exception ex) { logger.LogWarning(ex, "Ticket delivery failed for order {OrderId}; tickets remain available on the order page.", order.Id); }
     }
 }

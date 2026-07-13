@@ -1,2 +1,56 @@
 @model TicketOrderViewModel
-@{Layout=null;}<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta http-equiv="refresh" content="@(Model.Order.Status==TicketOrderStatus.Pending?"10":"")"><title>@Model.Event.Name tickets</title><style>:root{--a:@Model.Settings.AccentColor}*{box-sizing:border-box}body{margin:0;background:#fff7ed;color:#292018;font:16px/1.5 system-ui}.shell{max-width:850px;margin:auto;padding:45px 24px}.ticket{background:#fff;border:1px solid #fed7aa;border-radius:22px;padding:28px;margin:20px 0;display:grid;grid-template-columns:1fr 190px;gap:25px}.qr{width:190px}.code{font:700 15px monospace;word-break:break-all}.actions a{display:inline-block;padding:10px 14px;margin:5px;background:var(--a);color:#fff;text-decoration:none;border-radius:9px}.muted{color:#826d5b}@@media(max-width:600px){.ticket{grid-template-columns:1fr}.qr{width:100%;max-width:240px}}</style></head><body><main class="shell"><h1>@Model.Event.Name</h1><p>@Model.Event.StartsAt.ToString("dddd, dd MMMM yyyy · HH:mm")<br>@Model.Event.VenueName</p>@if(Model.Order.Status==TicketOrderStatus.Pending){<p>Waiting for payment confirmation. This page refreshes automatically.</p>}else if(Model.Order.Status==TicketOrderStatus.Cancelled){<p>This order was cancelled.</p>}else{<div class="actions">@if(Model.PdfUrl is not null){<a href="@Model.PdfUrl">Download PDF</a>}</div>@foreach(var d in Model.Tickets){<article class="ticket"><div><h2>@Model.TicketType.Name</h2><p>@d.Ticket.AttendeeName</p><p class="code">@d.Code</p><div class="actions">@if(d.AppleWalletUrl is not null){<a href="@d.AppleWalletUrl">Add to Apple Wallet</a>}@if(d.GoogleWalletUrl is not null){<a href="@d.GoogleWalletUrl">Add to Google Wallet</a>}</div></div><img class="qr" src="@d.QrDataUri" alt="Ticket QR code"></article>}}@if(Model.Settings.ShowMakePayPromotion){<p class="muted">@Model.Settings.PromotionText</p>}</main></body></html>
+@{ Layout = null; }
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>@Model.Event.Name tickets</title>
+    <partial name="~/Views/EventTickets/Public/_Theme.cshtml" model="Model.Settings" />
+</head>
+<body class="et-public">
+@if (Model.Order.Status == TicketOrderStatus.Pending)
+{
+    <main class="et-pending"><div class="et-spinner"></div><h1>Waiting for payment confirmation</h1><p class="et-section-copy">BTCPay is still processing this order. You can return to the embedded payment or leave this page open.</p>@if(Model.Order.InvoiceId is not null){<a class="et-primary" asp-action="Payment" asp-route-storeId="@Model.Order.StoreId" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">Return to payment</a>}</main>
+}
+else if (Model.Order.Status == TicketOrderStatus.Cancelled)
+{
+    <main class="et-pending"><h1>This order was cancelled</h1><p class="et-section-copy">No ticket was issued. Start a new order if you still want to attend.</p><a class="et-primary" asp-action="Event" asp-route-storeId="@Model.Order.StoreId" asp-route-eventId="@Model.Event.Slug">Choose tickets</a></main>
+}
+else
+{
+    <main class="et-success">
+        <div class="et-success-mark" aria-hidden="true"><img src="~/imlegacy/checkmark.svg" alt=""></div>
+        <p class="et-eyebrow">Payment confirmed</p>
+        <h1>@Model.Settings.ConfirmationTitle</h1>
+        <p class="et-success-lead">@Model.Settings.ConfirmationMessage A confirmation was sent to <strong>@Model.Order.BuyerEmail</strong>.</p>
+        <div class="et-summary">
+            <div class="et-summary-row"><span>Event</span><strong>@Model.Event.Name</strong></div>
+            <div class="et-summary-row"><span>Date</span><strong>@Model.Event.StartsAt.ToString("ddd, dd MMM yyyy · HH:mm")</strong></div>
+            <div class="et-summary-row"><span>Venue</span><strong>@Model.Event.VenueName</strong></div>
+            <div class="et-summary-row total"><span>@Model.Order.Quantity ticket@(Model.Order.Quantity == 1 ? "" : "s")</span><strong>@Model.Order.Total.ToString("0.##") @Model.Order.Currency</strong></div>
+        </div>
+        @if (Model.PdfUrl is not null) { <div class="et-actions"><a class="et-primary" href="@Model.PdfUrl">Download all tickets as PDF</a></div> }
+        <section aria-label="Tickets">
+            @foreach (var display in Model.Tickets)
+            {
+                <article class="et-ticket-pass">
+                    <div>
+                        <p class="et-eyebrow">@display.TicketType.Name</p>
+                        <h2>@display.Ticket.AttendeeName</h2>
+                        <p class="et-ticket-meta">@Model.Event.StartsAt.ToString("dddd, dd MMMM yyyy · HH:mm")<br>@Model.Event.VenueName · @Model.Event.VenueAddress</p>
+                        <div class="et-ticket-code">@display.Code</div>
+                        <div class="et-wallet-actions">
+                            @if (display.AppleWalletUrl is not null) { <a class="et-secondary" href="@display.AppleWalletUrl">Add to Apple Wallet</a> }
+                            @if (display.GoogleWalletUrl is not null) { <a class="et-secondary" href="@display.GoogleWalletUrl">Add to Google Wallet</a> }
+                        </div>
+                    </div>
+                    <img class="et-qr" src="@display.QrDataUri" alt="QR code for @display.Ticket.AttendeeName">
+                </article>
+            }
+        </section>
+        <partial name="~/Views/EventTickets/Public/_Footer.cshtml" model="Model.Settings" />
+    </main>
+}
+</body>
+</html>

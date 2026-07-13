@@ -1,2 +1,101 @@
 @model EventDetailViewModel
-@{Layout=null;}<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>@Model.Event.Name</title><style>:root{--a:@Model.Settings.AccentColor}*{box-sizing:border-box}body{margin:0;background:#fff7ed;color:#292018;font:16px/1.5 system-ui}.shell{max-width:980px;margin:auto;padding:35px 24px}.hero{background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 18px 50px #7c2d1210}.banner{width:100%;max-height:420px;object-fit:cover}.intro{padding:30px}.types{margin-top:30px;display:grid;gap:18px}.type{background:#fff;border:1px solid #fed7aa;border-radius:18px;padding:24px;display:grid;grid-template-columns:1fr auto;gap:20px}.price{font-size:1.4rem;font-weight:800}.buy{grid-column:1/-1;display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:10px}.buy input,.buy select{padding:11px;border:1px solid #d9c7b5;border-radius:10px}.buy button{background:var(--a);color:#fff;border:0;border-radius:10px;padding:11px 20px;font-weight:750}.sold{color:#b91c1c}@@media(max-width:700px){.buy{grid-template-columns:1fr}.type{grid-template-columns:1fr}}</style></head><body><main class="shell"><article class="hero">@if(Model.Event.BannerUrl is not null){<img class="banner" src="@Model.Event.BannerUrl" alt="">}<div class="intro"><h1>@Model.Event.Name</h1><p>@Model.Event.StartsAt.ToString("dddd, dd MMMM yyyy · HH:mm") — @Model.Event.EndsAt.ToString("HH:mm")</p><p><strong>@Model.Event.VenueName</strong><br>@Model.Event.VenueAddress</p><p>@Model.Event.Description</p>@if(Model.PosMode){<strong>POS mode</strong>}</div></article><section class="types">@foreach(var t in Model.Event.TicketTypes.Where(t=>t.Active)){var remaining=Model.Remaining[t.Id];<article class="type"><div><h2>@t.Name</h2><p>@t.Description</p><span class="@(remaining==0?"sold":"")">@(remaining is null?"Available":remaining+" remaining")</span></div><div class="price">@t.Price.ToString("0.00") @Model.Settings.Currency</div>@if(remaining!=0){<form class="buy" method="post" asp-action="Buy" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Id"><input type="hidden" name="ticketTypeId" value="@t.Id"><input type="hidden" name="pos" value="@Model.PosMode"><input name="buyerName" required placeholder="Attendee / buyer name"><input name="email" type="email" required placeholder="Email"><select name="quantity">@for(var q=1;q<=Math.Min(t.MaxPerOrder,remaining??t.MaxPerOrder);q++){<option value="@q">@q</option>}</select><button>Pay</button></form>}</article>}</section></main></body></html>
+@{
+    Layout = null;
+    var heroImage = Model.Event.BannerUrl ?? Model.Settings.HeroImageUrl;
+    var activeTypes = Model.Event.TicketTypes.Where(type => type.Active).ToList();
+}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>@Model.Event.Name tickets</title>
+    <partial name="~/Views/EventTickets/Public/_Theme.cshtml" model="Model.Settings" />
+</head>
+<body class="et-public">
+<main class="et-brand-shell">
+    <aside class="et-brand-panel">
+        @if (!string.IsNullOrWhiteSpace(heroImage))
+        {
+            <img class="et-brand-image" src="@heroImage" alt="">
+            <span class="et-brand-scrim" aria-hidden="true"></span>
+        }
+        <div class="et-brand-content">
+            @if (Model.PosMode) { <span class="et-pos-pill">Point of sale</span> }
+            @if (!string.IsNullOrWhiteSpace(Model.Settings.LogoUrl))
+            {
+                <img class="et-brand-logo" src="@Model.Settings.LogoUrl" alt="@Model.Settings.StorefrontTitle">
+            }
+            else
+            {
+                <div class="et-brand-wordmark">@Model.Settings.StorefrontTitle</div>
+            }
+            <p class="et-eyebrow">@Model.Settings.HeroEyebrow</p>
+            <h1 class="et-brand-headline">@Model.Settings.HeroHeadline</h1>
+            <p class="et-brand-subheadline">@Model.Settings.HeroSubheadline</p>
+            <div class="et-brand-meta">@Model.Event.StartsAt.ToString("dd MMM yyyy") · @Model.Event.VenueName</div>
+        </div>
+    </aside>
+    <section class="et-selector">
+        <div class="et-selector-inner">
+            <p class="et-eyebrow">@Model.Event.Name</p>
+            <h2 class="et-page-title">@Model.Settings.TicketPageTitle</h2>
+            <p class="et-page-subtitle">@Model.Settings.TicketPageSubtitle</p>
+            <div asp-validation-summary="All" class="et-alert"></div>
+            <form method="post" asp-action="StartCheckout" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug" id="ticket-selection">
+                <input type="hidden" name="Pos" value="@Model.PosMode.ToString().ToLowerInvariant()">
+                <div class="et-ticket-table-head"><span>Ticket</span><span>Price</span><span>Quantity</span></div>
+                @foreach (var type in activeTypes)
+                {
+                    var remaining = Model.Remaining[type.Id];
+                    var max = Math.Min(type.MaxPerOrder, remaining ?? type.MaxPerOrder);
+                    <article class="et-ticket-row @(remaining == 0 ? "is-sold" : "")" data-ticket-row data-price="@type.Price.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-max="@max">
+                        <div>
+                            @if (!string.IsNullOrWhiteSpace(type.Badge)) { <span class="et-badge">@type.Badge</span> }
+                            <h3 class="et-ticket-name">@type.Name</h3>
+                            @if (!string.IsNullOrWhiteSpace(type.Description))
+                            {
+                                <p class="et-ticket-description">@type.Description</p>
+                                @if (type.Description.Length > 150) { <button class="et-show-more" type="button" data-show-more>Show more</button> }
+                            }
+                            <span class="et-availability">@(remaining is null ? "Available" : remaining == 0 ? "Sold out" : $"{remaining} remaining")</span>
+                        </div>
+                        <div class="et-price">
+                            @if (type.CompareAtPrice is not null && type.CompareAtPrice > type.Price) { <span class="et-old-price">@type.CompareAtPrice.Value.ToString("0.##") @Model.Settings.Currency</span> }
+                            @type.Price.ToString("0.##") @Model.Settings.Currency
+                        </div>
+                        <div class="et-quantity">
+                            <button type="button" data-quantity-minus aria-label="Decrease @type.Name quantity" disabled>−</button>
+                            <output aria-live="polite">0</output>
+                            <button type="button" data-quantity-plus aria-label="Increase @type.Name quantity" disabled="@(remaining == 0 ? "disabled" : null)">+</button>
+                            <input type="hidden" name="Quantities[@type.Id]" value="0">
+                        </div>
+                    </article>
+                }
+                <div class="et-selector-total">
+                    <div><strong>Total</strong><p class="et-total-note">Taxes and discounts are calculated in the cart.</p></div>
+                    <output class="et-total-value"><span data-selection-total>0.00</span> @Model.Settings.Currency</output>
+                </div>
+                <button class="et-primary et-continue" type="submit" data-continue disabled>Continue</button>
+            </form>
+            <div class="et-selector-footer">
+                <strong>@Model.Event.Name</strong><br>
+                @Model.Event.StartsAt.ToString("dddd, dd MMMM yyyy · HH:mm") — @Model.Event.EndsAt.ToString("HH:mm")<br>
+                @Model.Event.VenueName · @Model.Event.VenueAddress
+                @if (!string.IsNullOrWhiteSpace(Model.Event.Description)) { <p>@Model.Event.Description</p> }
+                @if (Model.Settings.ShowMakePayPromotion)
+                {
+                    <div class="et-promotion">@Model.Settings.PromotionText <a href="https://makepay.io" target="_blank" rel="noopener">Enable multicurrency</a></div>
+                }
+            </div>
+        </div>
+    </section>
+</main>
+<script>
+(()=>{const form=document.getElementById('ticket-selection'),rows=[...form.querySelectorAll('[data-ticket-row]')],total=form.querySelector('[data-selection-total]'),continueButton=form.querySelector('[data-continue]');
+const update=()=>{let amount=0,count=0;rows.forEach(row=>{const input=row.querySelector('input[type=hidden]'),value=Number(input.value),max=Number(row.dataset.max);row.querySelector('output').textContent=value;row.querySelector('[data-quantity-minus]').disabled=value<=0;row.querySelector('[data-quantity-plus]').disabled=value>=max;amount+=value*Number(row.dataset.price);count+=value});total.textContent=amount.toFixed(2);continueButton.disabled=count===0};
+rows.forEach(row=>{const input=row.querySelector('input[type=hidden]');row.querySelector('[data-quantity-minus]').addEventListener('click',()=>{input.value=Math.max(0,Number(input.value)-1);update()});row.querySelector('[data-quantity-plus]').addEventListener('click',()=>{input.value=Math.min(Number(row.dataset.max),Number(input.value)+1);update()})});
+form.querySelectorAll('[data-show-more]').forEach(button=>button.addEventListener('click',()=>{const description=button.previousElementSibling;description.classList.toggle('is-open');button.textContent=description.classList.contains('is-open')?'Show less':'Show more'}));update()})();
+</script>
+</body>
+</html>
