@@ -25,14 +25,14 @@ public sealed class EventTicketRepository(StoreRepository stores)
         await Mutate<TicketOrderCollection>(storeId, EventTicketsPlugin.OrdersKey, orders =>
         {
             var now = DateTimeOffset.UtcNow;
-            foreach (var stale in orders.Orders.Values.Where(order => order.Status == TicketOrderStatus.Pending && order.ReservationExpiresAt <= now)) stale.Status = TicketOrderStatus.Cancelled;
+            foreach (var stale in orders.Orders.Values.Where(order => TicketReservationPolicy.CanExpire(order, now))) stale.Status = TicketOrderStatus.Cancelled;
             if (lines.Count == 0) return;
             foreach (var line in lines)
             {
                 var type = item.TicketTypes.FirstOrDefault(ticketType => ticketType.Id == line.TicketTypeId && ticketType.Active);
                 if (type is null || line.Quantity < 1 || line.Quantity > type.MaxPerOrder) return;
                 var reserved = orders.Orders.Values
-                    .Where(order => order.EventId == item.Id && order.Status != TicketOrderStatus.Cancelled)
+                    .Where(order => order.EventId == item.Id && TicketReservationPolicy.HoldsInventory(order, now))
                     .SelectMany(order => TicketCheckoutService.ResolveLines(order, item))
                     .Where(existing => existing.TicketTypeId == type.Id)
                     .Sum(existing => existing.Quantity);
@@ -84,7 +84,7 @@ public sealed class EventTicketRepository(StoreRepository stores)
     public async Task<Dictionary<string, int?>> GetRemaining(string storeId, TicketEvent item)
     {
         var now = DateTimeOffset.UtcNow;
-        var orders = (await GetOrders(storeId)).Where(order => order.EventId == item.Id && order.Status != TicketOrderStatus.Cancelled && (order.Status == TicketOrderStatus.Paid || order.ReservationExpiresAt > now)).ToList();
+        var orders = (await GetOrders(storeId)).Where(order => order.EventId == item.Id && TicketReservationPolicy.HoldsInventory(order, now)).ToList();
         return item.TicketTypes.ToDictionary(type => type.Id, type => type.Capacity == 0
             ? (int?)null
             : Math.Max(0, type.Capacity - orders.SelectMany(order => TicketCheckoutService.ResolveLines(order, item)).Where(line => line.TicketTypeId == type.Id).Sum(line => line.Quantity)));
@@ -93,4 +93,14 @@ public sealed class EventTicketRepository(StoreRepository stores)
     {
         var gate = _locks.GetOrAdd(storeId + ":" + key, _ => new SemaphoreSlim(1, 1)); await gate.WaitAsync(); try { var value = await stores.GetSettingAsync<T>(storeId, key) ?? new(); change(value); await stores.UpdateSetting(storeId, key, value); } finally { gate.Release(); }
     }
+}
+
+public static class TicketReservationPolicy
+{
+    public static bool CanExpire(TicketOrder order, DateTimeOffset now) =>
+        order.Status == TicketOrderStatus.Pending && string.IsNullOrWhiteSpace(order.InvoiceId) && order.ReservationExpiresAt <= now;
+
+    public static bool HoldsInventory(TicketOrder order, DateTimeOffset now) =>
+        order.Status == TicketOrderStatus.Paid ||
+        order.Status == TicketOrderStatus.Pending && (!string.IsNullOrWhiteSpace(order.InvoiceId) || order.ReservationExpiresAt > now);
 }
