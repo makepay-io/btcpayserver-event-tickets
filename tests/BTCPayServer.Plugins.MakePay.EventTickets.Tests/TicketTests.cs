@@ -84,6 +84,24 @@ public class TicketTests
         Assert.Contains("/Count 1", text);
     }
 
+    [Fact]
+    public void ExpiredReservationWithoutInvoiceCanBeReleased()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var order = new TicketOrder { Status = TicketOrderStatus.Pending, ReservationExpiresAt = now.AddSeconds(-1) };
+        Assert.True(TicketReservationPolicy.CanExpire(order, now));
+        Assert.False(TicketReservationPolicy.HoldsInventory(order, now));
+    }
+
+    [Fact]
+    public void InvoiceProtectsReservationAfterCheckoutTimerEnds()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var order = new TicketOrder { Status = TicketOrderStatus.Pending, InvoiceId = "invoice-1", ReservationExpiresAt = now.AddMinutes(-10) };
+        Assert.False(TicketReservationPolicy.CanExpire(order, now));
+        Assert.True(TicketReservationPolicy.HoldsInventory(order, now));
+    }
+
     private static TicketCheckoutService Checkout(out TicketCodeService codes)
     {
         codes = new TicketCodeService(new EphemeralDataProtectionProvider());

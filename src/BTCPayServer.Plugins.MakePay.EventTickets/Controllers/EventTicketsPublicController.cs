@@ -16,6 +16,7 @@ namespace BTCPayServer.Plugins.MakePay.EventTickets.Controllers;
 public sealed class EventTicketsPublicController(
     StoreRepository stores,
     EventTicketRepository repository,
+    InvoiceRepository invoiceRepository,
     UIInvoiceController invoices,
     TicketCodeService codes,
     TicketCheckoutService checkout,
@@ -109,7 +110,7 @@ public sealed class EventTicketsPublicController(
         var order = await repository.GetOrder(storeId, orderId);
         var item = await repository.GetEvent(storeId, eventId);
         if (order is null || item is null || order.EventId != item.Id || !checkout.CanAccess(order, accessToken)) return NotFound();
-        if (order.Status != TicketOrderStatus.Pending || order.ReservationExpiresAt <= DateTimeOffset.UtcNow) return RedirectToAction(nameof(Cart), new { storeId, eventId = item.Slug, orderId, accessToken });
+        if (order.Status != TicketOrderStatus.Pending || TicketReservationPolicy.CanExpire(order, DateTimeOffset.UtcNow)) return RedirectToAction(nameof(Event), new { storeId, eventId = item.Slug });
         var applied = TicketCheckoutService.ApplyPromo(order, await repository.GetSettings(storeId), promoCode);
         await repository.SaveOrder(storeId, order);
         return RedirectToAction(nameof(Cart), new { storeId, eventId = item.Slug, orderId, accessToken, promo = applied ? "applied" : "invalid" });
@@ -142,7 +143,7 @@ public sealed class EventTicketsPublicController(
     {
         var page = await BuildCheckoutPage(storeId, eventId, orderId, accessToken, 3);
         if (page is null) return NotFound();
-        if (page.Order.Status != TicketOrderStatus.Pending || page.Order.ReservationExpiresAt <= DateTimeOffset.UtcNow)
+        if (page.Order.Status != TicketOrderStatus.Pending || TicketReservationPolicy.CanExpire(page.Order, DateTimeOffset.UtcNow))
         {
             await repository.CancelOrder(storeId, orderId);
             return View("~/Views/EventTickets/Public/Details.cshtml", WithInput(page, input));
@@ -233,12 +234,30 @@ public sealed class EventTicketsPublicController(
     {
         var order = await repository.GetOrder(storeId, orderId);
         if (order is null || !checkout.CanAccess(order, accessToken)) return NotFound();
-        return order.Status switch
+        if (order.Status == TicketOrderStatus.Paid)
+            return Ok(new TicketPaymentStatus("paid", Url.ActionLink(nameof(Order), values: new { storeId, orderId, accessToken }), "Payment confirmed."));
+        var item = await repository.GetEvent(storeId, order.EventId);
+        var restartUrl = item is null ? Url.Action(nameof(Storefront), new { storeId }) : Url.Action(nameof(Event), new { storeId, eventId = item.Slug });
+        if (order.Status == TicketOrderStatus.Cancelled)
+            return Ok(new TicketPaymentStatus("cancelled", restartUrl, "This invoice can no longer be paid. Choose your tickets again."));
+        if (!string.IsNullOrWhiteSpace(order.InvoiceId))
         {
-            TicketOrderStatus.Paid => Ok(new TicketPaymentStatus("paid", Url.ActionLink(nameof(Order), values: new { storeId, orderId, accessToken }), "Payment confirmed.")),
-            TicketOrderStatus.Cancelled => Ok(new TicketPaymentStatus("cancelled", null, "This payment session expired or was cancelled.")),
-            _ => Ok(new TicketPaymentStatus("pending", null, "Waiting for payment confirmation."))
-        };
+            var invoice = await invoiceRepository.GetInvoice(order.InvoiceId);
+            if (invoice is not null)
+            {
+                var hasPayment = invoice.GetPayments(false).Any();
+                if (invoice.Status == InvoiceStatus.Settled) return Ok(new TicketPaymentStatus("processing", null, "Payment settled. Preparing your tickets."));
+                if (invoice.Status == InvoiceStatus.Processing) return Ok(new TicketPaymentStatus("processing", null, "Payment detected. Waiting for blockchain confirmations."));
+                if (invoice.Status == InvoiceStatus.Expired && hasPayment) return Ok(new TicketPaymentStatus("partial", null, "Payment detected. BTCPay is waiting for the remaining amount or confirmation."));
+                if (invoice.Status == InvoiceStatus.New && hasPayment) return Ok(new TicketPaymentStatus("partial", null, "Payment detected. Waiting for BTCPay to update the invoice."));
+                if (invoice.Status is InvoiceStatus.Expired or InvoiceStatus.Invalid)
+                {
+                    await repository.CancelOrder(storeId, orderId);
+                    return Ok(new TicketPaymentStatus("cancelled", restartUrl, "This invoice can no longer be paid. Choose your tickets again."));
+                }
+            }
+        }
+        return Ok(new TicketPaymentStatus("pending", null, "Waiting for payment confirmation."));
     }
 
     [HttpGet("order/{orderId}")]
@@ -310,7 +329,7 @@ public sealed class EventTicketsPublicController(
         var order = await repository.GetOrder(storeId, orderId);
         var item = await repository.GetEvent(storeId, eventId);
         if (order is null || item is null || order.EventId != item.Id || !checkout.CanAccess(order, accessToken)) return null;
-        if (order.Status == TicketOrderStatus.Pending && order.ReservationExpiresAt <= DateTimeOffset.UtcNow)
+        if (TicketReservationPolicy.CanExpire(order, DateTimeOffset.UtcNow))
         {
             await repository.CancelOrder(storeId, order.Id);
             order.Status = TicketOrderStatus.Cancelled;

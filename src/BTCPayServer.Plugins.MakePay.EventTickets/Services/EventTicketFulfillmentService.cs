@@ -16,7 +16,13 @@ public sealed class EventTicketFulfillmentService(EventAggregator events, ILogge
     {
         if (evt is not InvoiceEvent invoiceEvent) return;
         var orderId = invoiceEvent.Invoice.GetInternalTags(TagPrefix).FirstOrDefault(); if (orderId is null) return;
-        if (invoiceEvent.EventCode is InvoiceEventCode.Expired or InvoiceEventCode.MarkedInvalid or InvoiceEventCode.FailedToConfirm) { await repository.CancelOrder(invoiceEvent.Invoice.StoreId, orderId); return; }
+        if (invoiceEvent.EventCode == InvoiceEventCode.Expired)
+        {
+            if (!invoiceEvent.PaidPartial && !invoiceEvent.Invoice.GetPayments(false).Any()) await repository.CancelOrder(invoiceEvent.Invoice.StoreId, orderId);
+            return;
+        }
+        if (invoiceEvent.EventCode == InvoiceEventCode.ExpiredPaidPartial) return;
+        if (invoiceEvent.EventCode is InvoiceEventCode.MarkedInvalid or InvoiceEventCode.FailedToConfirm) { await repository.CancelOrder(invoiceEvent.Invoice.StoreId, orderId); return; }
         var settings = await repository.GetSettings(invoiceEvent.Invoice.StoreId);
         var eligible = invoiceEvent.EventCode is InvoiceEventCode.Completed or InvoiceEventCode.Confirmed or InvoiceEventCode.MarkedCompleted || settings.DeliverOnProcessing && invoiceEvent.EventCode == InvoiceEventCode.PaidInFull; if (!eligible) return;
         var order = await repository.GetOrder(invoiceEvent.Invoice.StoreId, orderId); if (order is null || order.Status == TicketOrderStatus.Paid) return;
