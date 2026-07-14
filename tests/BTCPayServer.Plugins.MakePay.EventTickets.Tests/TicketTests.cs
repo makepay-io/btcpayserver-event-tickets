@@ -324,6 +324,7 @@ public class TicketTests
 
         Assert.Contains("Use your own domain", settings, StringComparison.Ordinal);
         Assert.Contains("Server administrator required", settings, StringComparison.Ordinal);
+        Assert.Contains("TicketPublicUrl.ToAbsoluteHttpUrl", settings, StringComparison.Ordinal);
         Assert.Contains("BTCPAY_ADDITIONAL_HOSTS", settings, StringComparison.Ordinal);
         Assert.Contains("DNS alone does not remove the store ID", settings, StringComparison.Ordinal);
         Assert.Contains("not registered as a BTCPay App", settings, StringComparison.Ordinal);
@@ -332,6 +333,20 @@ public class TicketTests
         Assert.Contains("rel=\"noopener noreferrer\"", settings, StringComparison.Ordinal);
         Assert.Contains("docs.btcpayserver.org/FAQ/Apps/", settings, StringComparison.Ordinal);
         Assert.Contains("docs.btcpayserver.org/FAQ/Deployment/", settings, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("/stores/store-1/events/summit", "https", "pay.example.com", "https://pay.example.com/stores/store-1/events/summit")]
+    [InlineData("stores/store-1/events/summit", "https", "pay.example.com:8443", "https://pay.example.com:8443/stores/store-1/events/summit")]
+    [InlineData("https://tickets.example.com/stores/store-1/events/summit", "https", "pay.example.com", "https://tickets.example.com/stores/store-1/events/summit")]
+    [InlineData("http://tickets.example.com/stores/store-1/events/summit", "https", "pay.example.com", "http://tickets.example.com/stores/store-1/events/summit")]
+    public void TicketPublicUrlKeepsHttpUrlsAndAnchorsRelativeRoutesToRequestHost(
+        string pathOrUrl,
+        string requestScheme,
+        string requestHost,
+        string expected)
+    {
+        Assert.Equal(expected, TicketPublicUrl.ToAbsoluteHttpUrl(pathOrUrl, requestScheme, requestHost));
     }
 
     private static TicketCheckoutService Checkout(out TicketCodeService codes)

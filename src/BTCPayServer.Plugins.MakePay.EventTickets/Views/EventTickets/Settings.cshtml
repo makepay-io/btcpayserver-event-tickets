@@ -5,9 +5,10 @@
     var canonicalPath = string.IsNullOrWhiteSpace(previewEventUrl)
         ? $"/stores/{storeId}/events"
         : previewEventUrl;
-    var canonicalPublicUrl = Uri.TryCreate(canonicalPath, UriKind.Absolute, out var absoluteCanonicalUrl)
-        ? absoluteCanonicalUrl.ToString()
-        : $"{Context.Request.Scheme}://{Context.Request.Host}{(canonicalPath.StartsWith('/') ? string.Empty : "/")}{canonicalPath}";
+    var canonicalPublicUrl = TicketPublicUrl.ToAbsoluteHttpUrl(
+        canonicalPath,
+        Context.Request.Scheme,
+        Context.Request.Host.Value);
     var brandedPublicUrl = Uri.TryCreate(canonicalPublicUrl, UriKind.Absolute, out var canonicalUri)
         ? $"https://tickets.yourdomain.com{canonicalUri.PathAndQuery}"
         : $"https://tickets.yourdomain.com/stores/{storeId}/events";
