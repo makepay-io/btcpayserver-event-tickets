@@ -172,6 +172,9 @@ public sealed class TicketOrder
     public string? InvoiceId { get; set; }
     public bool PosMode { get; set; }
     public string PublicBaseUrl { get; set; } = "";
+    // Null preserves URL behavior for orders created before route/origin
+    // intent was persisted. New orders always store an explicit value.
+    public bool? PreferCleanUrls { get; set; }
     public string? ProtectedPublicAccessToken { get; set; }
     public string? PublicAccessTokenHash { get; set; }
     public TicketOrderStatus Status { get; set; }
@@ -249,10 +252,11 @@ public sealed class EventTicketsDashboardViewModel
     public required IReadOnlyList<TicketEvent> Events { get; init; }
     public required IReadOnlyList<TicketOrder> Orders { get; init; }
     public required IReadOnlyList<IssuedTicket> Tickets { get; init; }
+    public string? MappedBaseUrl { get; init; }
 }
 
-public sealed class EventStorefrontViewModel { public required string StoreId { get; init; } public required EventTicketSettings Settings { get; init; } public required IReadOnlyList<TicketEvent> Events { get; init; } }
-public sealed class EventDetailViewModel { public required string StoreId { get; init; } public required EventTicketSettings Settings { get; init; } public required TicketEvent Event { get; init; } public required Dictionary<string, int?> Remaining { get; init; } public bool PosMode { get; init; } }
+public sealed class EventStorefrontViewModel { public required string StoreId { get; init; } public required EventTicketSettings Settings { get; init; } public required IReadOnlyList<TicketEvent> Events { get; init; } public bool CleanUrls { get; init; } }
+public sealed class EventDetailViewModel { public required string StoreId { get; init; } public required EventTicketSettings Settings { get; init; } public required TicketEvent Event { get; init; } public required Dictionary<string, int?> Remaining { get; init; } public bool PosMode { get; init; } public bool CleanUrls { get; init; } }
 
 public sealed class EventTicketAnalyticsContext
 {
@@ -274,6 +278,7 @@ public sealed class TicketCheckoutPageViewModel
     public TicketCheckoutInput Input { get; init; } = new();
     public int Step { get; init; }
     public string? PromoMessage { get; init; }
+    public bool CleanUrls { get; init; }
 }
 
 public sealed class DisplayTicket
@@ -295,6 +300,7 @@ public sealed class TicketOrderViewModel
     public required IReadOnlyList<DisplayTicket> Tickets { get; init; }
     public required string AccessToken { get; init; }
     public string? PdfUrl { get; init; }
+    public bool CleanUrls { get; init; }
 }
 
 public sealed record TicketPaymentStatus(string Status, string? RedirectUrl, string Message);

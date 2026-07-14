@@ -1,5 +1,5 @@
 @model TicketCheckoutPageViewModel
-@{ Layout = null; var invoiceUrl = Url.Action("Checkout", "UIInvoice", new { invoiceId = Model.Order.InvoiceId }); var statusUrl = Url.Action("OrderStatus", "EventTicketsPublic", new { storeId = Model.StoreId, orderId = Model.Order.Id, accessToken = Model.AccessToken }); var analyticsEcommerce = TicketAnalytics.ForOrder(Model.Order, Model.Event, Model.Lines, payment: true); var analyticsOrderId = TicketAnalytics.AnalyticsTransactionId(Model.Order); var analyticsContext = new EventTicketAnalyticsContext { Settings = Model.Settings, StoreId = Model.StoreId, PageType = "payment", EventId = Model.Event.Id, EventSlug = Model.Event.Slug }; }
+@{ Layout = null; var invoiceUrl = Url.Action("Checkout", "UIInvoice", new { invoiceId = Model.Order.InvoiceId }); var statusUrl = Url.Action("OrderStatus", values: new { storeId = Model.CleanUrls ? null : Model.StoreId, orderId = Model.Order.Id, accessToken = Model.AccessToken }); var analyticsEcommerce = TicketAnalytics.ForOrder(Model.Order, Model.Event, Model.Lines, payment: true); var analyticsOrderId = TicketAnalytics.AnalyticsTransactionId(Model.Order); var analyticsContext = new EventTicketAnalyticsContext { Settings = Model.Settings, StoreId = Model.StoreId, PageType = "payment", EventId = Model.Event.Id, EventSlug = Model.Event.Slug }; }
 <!doctype html>
 <html lang="en">
 <head>

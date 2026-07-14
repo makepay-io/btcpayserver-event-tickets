@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace BTCPayServer.Plugins.MakePay.EventTickets.Services;
 
-public sealed class EventTicketFulfillmentService(EventAggregator events, ILogger<EventTicketFulfillmentService> logger, EventTicketRepository repository, TicketCodeService codes, TicketCheckoutService checkout, TicketEmailService email) : EventHostedServiceBase(events, logger)
+public sealed class EventTicketFulfillmentService(EventAggregator events, ILogger<EventTicketFulfillmentService> logger, EventTicketRepository repository, TicketCodeService codes, TicketCheckoutService checkout, TicketEmailService email, EventTicketsAppService eventApps) : EventHostedServiceBase(events, logger)
 {
     public const string TagPrefix = "MPET#";
     public static string Tag(string orderId) => TagPrefix + orderId;
@@ -55,7 +55,7 @@ public sealed class EventTicketFulfillmentService(EventAggregator events, ILogge
         }
         await repository.SaveTickets(order.StoreId, tickets); order.TicketIds = tickets.Select(t => t.Id).ToList(); order.Status = TicketOrderStatus.Paid; order.PaidAt = DateTimeOffset.UtcNow; await repository.SaveOrder(order.StoreId, order);
         var accessToken = checkout.GetAccessToken(order);
-        var orderUrl = order.PublicBaseUrl.TrimEnd('/') + $"/stores/{order.StoreId}/events/order/{order.Id}" + (accessToken is null ? "" : $"?accessToken={Uri.EscapeDataString(accessToken)}");
+        var orderUrl = TicketPublicUrl.OrderUrl(order, accessToken, await eventApps.GetMappedBaseUrl(order.StoreId));
         try { await email.Send(order.StoreId, settings, item, order, tickets, orderUrl, cancellationToken); order.DeliverySent = true; await repository.SaveOrder(order.StoreId, order); }
         catch (Exception ex) { logger.LogWarning(ex, "Ticket delivery failed for order {OrderId}; tickets remain available on the order page.", order.Id); }
     }

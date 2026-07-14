@@ -52,7 +52,7 @@
             <h2 class="et-page-title">@Model.Settings.TicketPageTitle</h2>
             <p class="et-page-subtitle">@Model.Settings.TicketPageSubtitle</p>
             <div asp-validation-summary="All" class="et-alert"></div>
-            <form method="post" asp-action="StartCheckout" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug" id="ticket-selection">
+            <form method="post" asp-action="StartCheckout" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug" id="ticket-selection">
                 <input type="hidden" name="Pos" value="@Model.PosMode.ToString().ToLowerInvariant()">
                 <div class="et-ticket-table-head"><span>Ticket</span><span>Price</span><span>Quantity</span></div>
                 @foreach (var type in activeTypes)

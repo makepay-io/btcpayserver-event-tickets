@@ -47,7 +47,7 @@
                         <h2>@item.Name</h2>
                         <p class="event-card-meta">@item.StartsAt.ToString("ddd, dd MMM yyyy · HH:mm")<br>@item.VenueName</p>
                         <p class="event-card-copy">@item.Description</p>
-                        <a class="et-primary" data-select-event="@item.Id" asp-action="Event" asp-route-storeId="@Model.StoreId" asp-route-eventId="@item.Slug">View tickets</a>
+                        <a class="et-primary" data-select-event="@item.Id" asp-action="Event" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@item.Slug">View tickets</a>
                     </div>
                 </article>
             }
