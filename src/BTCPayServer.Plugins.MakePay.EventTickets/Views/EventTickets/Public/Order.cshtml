@@ -12,7 +12,7 @@
 <partial name="~/Views/EventTickets/Public/_Analytics.cshtml" model="analyticsContext" />
 @if (Model.Order.Status == TicketOrderStatus.Pending)
 {
-    <main class="et-pending"><div class="et-spinner"></div><h1>Waiting for payment confirmation</h1><p class="et-section-copy">BTCPay is still processing this order. You can return to the embedded payment or leave this page open.</p>@if(Model.Order.InvoiceId is not null){<a class="et-primary" asp-action="Payment" asp-route-storeId="@Model.Order.StoreId" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">Return to payment</a>}</main>
+    <main class="et-pending"><div class="et-spinner"></div><h1>Waiting for payment confirmation</h1><p class="et-section-copy">BTCPay is still processing this order. You can return to the embedded payment or leave this page open.</p>@if(Model.Order.InvoiceId is not null){<a class="et-primary" asp-action="Payment" asp-route-storeId="@(Model.CleanUrls ? null : Model.Order.StoreId)" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">Return to payment</a>}</main>
 }
 else if (Model.Order.Status == TicketOrderStatus.Cancelled)
 {
@@ -20,10 +20,10 @@ else if (Model.Order.Status == TicketOrderStatus.Cancelled)
         <h1>This order was cancelled</h1>
         <p class="et-section-copy">No ticket was issued. Rebuy reserves the same selection in a fresh session.</p>
         <div class="et-restart-actions">
-            <form method="post" asp-action="Rebuy" asp-route-storeId="@Model.Order.StoreId" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
+            <form method="post" asp-action="Rebuy" asp-route-storeId="@(Model.CleanUrls ? null : Model.Order.StoreId)" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
                 <button class="et-primary" type="submit" data-loading-title="Reserving your tickets…" data-loading-message="We are creating a fresh reservation with your previous selection.">Rebuy tickets</button>
             </form>
-            <a class="et-secondary" asp-action="Event" asp-route-storeId="@Model.Order.StoreId" asp-route-eventId="@Model.Event.Slug">Choose different tickets</a>
+            <a class="et-secondary" asp-action="Event" asp-route-storeId="@(Model.CleanUrls ? null : Model.Order.StoreId)" asp-route-eventId="@Model.Event.Slug">Choose different tickets</a>
         </div>
     </main>
 }

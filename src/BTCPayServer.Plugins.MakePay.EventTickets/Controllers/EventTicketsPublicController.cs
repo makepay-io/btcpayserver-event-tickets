@@ -3,17 +3,20 @@ using BTCPayServer.Abstractions.Extensions;
 using BTCPayServer.Client.Models;
 using BTCPayServer.Controllers;
 using BTCPayServer.Data;
+using BTCPayServer.Filters;
 using BTCPayServer.Plugins.MakePay.EventTickets.Models;
 using BTCPayServer.Plugins.MakePay.EventTickets.Services;
 using BTCPayServer.Services.Invoices;
 using BTCPayServer.Services.Stores;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Routing;
 
 namespace BTCPayServer.Plugins.MakePay.EventTickets.Controllers;
 
-[Route("stores/{storeId}/events")]
-public sealed class EventTicketsPublicController(
+public abstract class EventTicketsPublicControllerBase(
     StoreRepository stores,
     EventTicketRepository repository,
     InvoiceRepository invoiceRepository,
@@ -21,8 +24,12 @@ public sealed class EventTicketsPublicController(
     TicketCodeService codes,
     TicketCheckoutService checkout,
     TicketDocumentService documents,
-    WalletPassService wallets) : Controller
+    WalletPassService wallets,
+    EventTicketsAppService eventApps) : Controller
 {
+    protected abstract bool CleanUrls { get; }
+    protected EventTicketsAppService EventApps { get; } = eventApps;
+
     [HttpGet("")]
     public async Task<IActionResult> Storefront(string storeId)
     {
@@ -31,7 +38,8 @@ public sealed class EventTicketsPublicController(
         {
             StoreId = storeId,
             Settings = await repository.GetSettings(storeId),
-            Events = (await repository.GetEvents(storeId)).Where(item => item.Published && item.EndsAt > DateTimeOffset.UtcNow).ToList()
+            Events = (await repository.GetEvents(storeId)).Where(item => item.Published && item.EndsAt > DateTimeOffset.UtcNow).ToList(),
+            CleanUrls = CleanUrls
         });
     }
 
@@ -51,7 +59,8 @@ public sealed class EventTicketsPublicController(
             Settings = await repository.GetSettings(storeId),
             Event = item,
             Remaining = await repository.GetRemaining(storeId, item),
-            PosMode = posMode
+            PosMode = posMode,
+            CleanUrls = CleanUrls
         });
     }
 
@@ -77,11 +86,12 @@ public sealed class EventTicketsPublicController(
             return await ShowEvent(storeId, eventId, input.Pos);
         }
 
-        order.PublicBaseUrl = Request.GetAbsoluteRoot();
+        TicketPublicUrl.CaptureOrderOrigin(order, CleanUrls, Request.IsOnion(),
+            await EventApps.GetMappedBaseUrl(storeId), Request.GetAbsoluteRoot());
         order.PosMode = input.Pos;
         var accessToken = checkout.CreateAccessToken(order);
         await repository.SaveOrder(storeId, order);
-        return RedirectToAction(nameof(Cart), new { storeId, eventId = item.Slug, orderId = order.Id, accessToken });
+        return RedirectPublic(nameof(Cart), new { storeId, eventId = item.Slug, orderId = order.Id, accessToken });
     }
 
     [HttpPost("{eventId}/checkout/{orderId}/rebuy")]
@@ -94,14 +104,14 @@ public sealed class EventTicketsPublicController(
             !checkout.CanAccess(previousOrder, accessToken)) return NotFound();
 
         if (previousOrder.Status == TicketOrderStatus.Paid)
-            return RedirectToAction(nameof(Order), new { storeId, orderId, accessToken });
+            return RedirectPublic(nameof(Order), new { storeId, orderId, accessToken });
 
         if (previousOrder.Status == TicketOrderStatus.Pending)
         {
             if (!string.IsNullOrWhiteSpace(previousOrder.InvoiceId))
-                return RedirectToAction(nameof(Payment), new { storeId, eventId = item.Slug, orderId, accessToken });
+                return RedirectPublic(nameof(Payment), new { storeId, eventId = item.Slug, orderId, accessToken });
             if (!TicketReservationPolicy.CanExpire(previousOrder, DateTimeOffset.UtcNow))
-                return RedirectToAction(nameof(Details), new { storeId, eventId = item.Slug, orderId, accessToken });
+                return RedirectPublic(nameof(Details), new { storeId, eventId = item.Slug, orderId, accessToken });
 
             await repository.CancelOrder(storeId, previousOrder.Id);
             previousOrder.Status = TicketOrderStatus.Cancelled;
@@ -110,19 +120,20 @@ public sealed class EventTicketsPublicController(
         var settings = await repository.GetSettings(storeId);
         var lines = TicketCheckoutService.BuildRebuyLines(previousOrder, item);
         if (previousOrder.Status != TicketOrderStatus.Cancelled || lines.Count == 0 || item.EndsAt <= DateTimeOffset.UtcNow)
-            return RedirectToAction(nameof(Event), new { storeId, eventId = item.Slug });
+            return RedirectPublic(nameof(Event), new { storeId, eventId = item.Slug });
 
         var order = await repository.TryCreateOrder(storeId, item, settings, lines);
         if (order is null)
-            return RedirectToAction(nameof(Event), new { storeId, eventId = item.Slug });
+            return RedirectPublic(nameof(Event), new { storeId, eventId = item.Slug });
 
-        order.PublicBaseUrl = Request.GetAbsoluteRoot();
+        TicketPublicUrl.CaptureOrderOrigin(order, CleanUrls, Request.IsOnion(),
+            await EventApps.GetMappedBaseUrl(storeId), Request.GetAbsoluteRoot());
         order.PosMode = previousOrder.PosMode;
         if (!string.IsNullOrWhiteSpace(previousOrder.PromoCode))
             TicketCheckoutService.ApplyPromo(order, settings, previousOrder.PromoCode);
         var newAccessToken = checkout.CreateAccessToken(order);
         await repository.SaveOrder(storeId, order);
-        return RedirectToAction(nameof(Details), new
+        return RedirectPublic(nameof(Details), new
         {
             storeId,
             eventId = item.Slug,
@@ -145,7 +156,8 @@ public sealed class EventTicketsPublicController(
             Lines = page.Lines,
             AccessToken = page.AccessToken,
             Step = 2,
-            PromoMessage = promo == "applied" ? "Promotion applied." : promo == "invalid" ? "That promotion code is not valid." : null
+            PromoMessage = promo == "applied" ? "Promotion applied." : promo == "invalid" ? "That promotion code is not valid." : null,
+            CleanUrls = CleanUrls
         };
         return View("~/Views/EventTickets/Public/Cart.cshtml", page);
     }
@@ -157,10 +169,10 @@ public sealed class EventTicketsPublicController(
         var order = await repository.GetOrder(storeId, orderId);
         var item = await repository.GetEvent(storeId, eventId);
         if (order is null || item is null || order.EventId != item.Id || !checkout.CanAccess(order, accessToken)) return NotFound();
-        if (order.Status != TicketOrderStatus.Pending || TicketReservationPolicy.CanExpire(order, DateTimeOffset.UtcNow)) return RedirectToAction(nameof(Event), new { storeId, eventId = item.Slug });
+        if (order.Status != TicketOrderStatus.Pending || TicketReservationPolicy.CanExpire(order, DateTimeOffset.UtcNow)) return RedirectPublic(nameof(Event), new { storeId, eventId = item.Slug });
         var applied = TicketCheckoutService.ApplyPromo(order, await repository.GetSettings(storeId), promoCode);
         await repository.SaveOrder(storeId, order);
-        return RedirectToAction(nameof(Cart), new { storeId, eventId = item.Slug, orderId, accessToken, promo = applied ? "applied" : "invalid" });
+        return RedirectPublic(nameof(Cart), new { storeId, eventId = item.Slug, orderId, accessToken, promo = applied ? "applied" : "invalid" });
     }
 
     [HttpGet("{eventId}/checkout/{orderId}/details")]
@@ -232,7 +244,10 @@ public sealed class EventTicketsPublicController(
             if (store is null) return NotFound();
             try
             {
-                var successUrl = Url.ActionLink(nameof(Order), values: new { storeId, orderId = order.Id, accessToken })!;
+                // The invoice redirect honors the persisted route/origin intent.
+                // This keeps onion checkouts on their onion origin even when the
+                // same store also has a native clearnet App mapping.
+                var successUrl = TicketPublicUrl.OrderUrl(order, accessToken, await EventApps.GetMappedBaseUrl(storeId));
                 var invoice = await invoices.CreateInvoiceCoreRaw(new CreateInvoiceRequest
                 {
                     Amount = order.Total,
@@ -263,7 +278,7 @@ public sealed class EventTicketsPublicController(
             }
         }
 
-        return RedirectToAction(nameof(Payment), new { storeId, eventId = page.Event.Slug, orderId = order.Id, accessToken });
+        return RedirectPublic(nameof(Payment), new { storeId, eventId = page.Event.Slug, orderId = order.Id, accessToken });
     }
 
     [HttpGet("{eventId}/checkout/{orderId}/payment")]
@@ -271,7 +286,7 @@ public sealed class EventTicketsPublicController(
     {
         var page = await BuildCheckoutPage(storeId, eventId, orderId, accessToken, 4);
         if (page is null || string.IsNullOrWhiteSpace(page.Order.InvoiceId)) return NotFound();
-        if (page.Order.Status == TicketOrderStatus.Paid) return RedirectToAction(nameof(Order), new { storeId, orderId, accessToken });
+        if (page.Order.Status == TicketOrderStatus.Paid) return RedirectPublic(nameof(Order), new { storeId, orderId, accessToken });
         return View("~/Views/EventTickets/Public/Payment.cshtml", page);
     }
 
@@ -282,9 +297,9 @@ public sealed class EventTicketsPublicController(
         var order = await repository.GetOrder(storeId, orderId);
         if (order is null || !checkout.CanAccess(order, accessToken)) return NotFound();
         if (order.Status == TicketOrderStatus.Paid)
-            return Ok(new TicketPaymentStatus("paid", Url.ActionLink(nameof(Order), values: new { storeId, orderId, accessToken }), "Payment confirmed."));
+            return Ok(new TicketPaymentStatus("paid", PublicActionLink(nameof(Order), new { storeId, orderId, accessToken }), "Payment confirmed."));
         var item = await repository.GetEvent(storeId, order.EventId);
-        var restartUrl = item is null ? Url.Action(nameof(Storefront), new { storeId }) : Url.Action(nameof(Event), new { storeId, eventId = item.Slug });
+        var restartUrl = item is null ? PublicAction(nameof(Storefront), new { storeId }) : PublicAction(nameof(Event), new { storeId, eventId = item.Slug });
         if (order.Status == TicketOrderStatus.Cancelled)
             return Ok(new TicketPaymentStatus("cancelled", restartUrl, "This invoice can no longer be paid. Choose your tickets again."));
         if (!string.IsNullOrWhiteSpace(order.InvoiceId))
@@ -328,7 +343,7 @@ public sealed class EventTicketsPublicController(
                 TicketType = type,
                 Code = code,
                 QrDataUri = documents.QrDataUri(storeId, code),
-                AppleWalletUrl = wallets.AppleConfigured(settings) ? Url.ActionLink(nameof(AppleWallet), values: new { storeId, orderId, ticketId = ticket.Id, accessToken }) : null,
+                AppleWalletUrl = wallets.AppleConfigured(settings) ? PublicActionLink(nameof(AppleWallet), new { storeId, orderId, ticketId = ticket.Id, accessToken }) : null,
                 GoogleWalletUrl = wallets.GoogleConfigured(settings) ? wallets.CreateGoogleSaveUrl(settings, item, type, ticket, code) : null
             });
         }
@@ -340,7 +355,8 @@ public sealed class EventTicketsPublicController(
             Lines = TicketCheckoutService.ResolveLineViewModels(order, item),
             Tickets = display,
             AccessToken = accessToken ?? string.Empty,
-            PdfUrl = display.Count > 0 ? Url.ActionLink(nameof(Pdf), values: new { storeId, orderId, accessToken }) : null
+            PdfUrl = display.Count > 0 ? PublicActionLink(nameof(Pdf), new { storeId, orderId, accessToken }) : null,
+            CleanUrls = CleanUrls
         });
     }
 
@@ -389,7 +405,8 @@ public sealed class EventTicketsPublicController(
             Order = order,
             Lines = TicketCheckoutService.ResolveLineViewModels(order, item),
             AccessToken = accessToken ?? string.Empty,
-            Step = step
+            Step = step,
+            CleanUrls = CleanUrls
         };
     }
 
@@ -402,7 +419,8 @@ public sealed class EventTicketsPublicController(
         Lines = page.Lines,
         AccessToken = page.AccessToken,
         Step = 3,
-        Input = input
+        Input = input,
+        CleanUrls = page.CleanUrls
     };
 
     private static TicketAttendeeInput ToInput(TicketAttendee attendee) => new()
@@ -416,4 +434,93 @@ public sealed class EventTicketsPublicController(
         Country = attendee.Country,
         Company = attendee.Company
     };
+
+    private RouteValueDictionary PublicValues(object values)
+    {
+        var routeValues = new RouteValueDictionary(values);
+        if (CleanUrls) routeValues.Remove("storeId");
+        return routeValues;
+    }
+
+    private RedirectToActionResult RedirectPublic(string action, object values) =>
+        RedirectToAction(action, CleanUrls ? TicketPublicUrl.CleanController : TicketPublicUrl.LegacyController,
+            PublicValues(values));
+
+    private string? PublicAction(string action, object values) =>
+        Url.Action(action, CleanUrls ? TicketPublicUrl.CleanController : TicketPublicUrl.LegacyController,
+            PublicValues(values));
+
+    private string? PublicActionLink(string action, object values) =>
+        Url.ActionLink(action, CleanUrls ? TicketPublicUrl.CleanController : TicketPublicUrl.LegacyController,
+            PublicValues(values));
+}
+
+[Route("stores/{storeId}/events")]
+public sealed class EventTicketsPublicController(
+    StoreRepository stores,
+    EventTicketRepository repository,
+    InvoiceRepository invoiceRepository,
+    UIInvoiceController invoices,
+    TicketCodeService codes,
+    TicketCheckoutService checkout,
+    TicketDocumentService documents,
+    WalletPassService wallets,
+    EventTicketsAppService eventApps) : EventTicketsPublicControllerBase(stores, repository, invoiceRepository, invoices, codes, checkout, documents, wallets, eventApps)
+{
+    protected override bool CleanUrls => false;
+
+    public override async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+    {
+        if ((HttpMethods.IsGet(Request.Method) || HttpMethods.IsHead(Request.Method)) && !Request.IsOnion() &&
+            context.ActionArguments.TryGetValue("storeId", out var value) && value is string storeId)
+        {
+            var (app, domain) = await EventApps.MappingForStore(storeId);
+            if (app is not null) HttpContext.SetAppData(app);
+            var redirect = domain is null
+                ? null
+                : TicketPublicUrl.CleanUrlFromLegacy(await EventApps.GetMappedBaseUrl(storeId), storeId,
+                    Request.PathBase, Request.Path, Request.QueryString);
+            if (redirect is not null)
+            {
+                context.Result = new RedirectResult(redirect, permanent: true, preserveMethod: true);
+                return;
+            }
+        }
+        await base.OnActionExecutionAsync(context, next);
+    }
+}
+
+[Route("events")]
+[DomainMappingConstraint(EventTicketsAppType.AppType)]
+public sealed class CleanEventTicketsPublicController(
+    StoreRepository stores,
+    EventTicketRepository repository,
+    InvoiceRepository invoiceRepository,
+    UIInvoiceController invoices,
+    TicketCodeService codes,
+    TicketCheckoutService checkout,
+    TicketDocumentService documents,
+    WalletPassService wallets,
+    EventTicketsAppService eventApps) : EventTicketsPublicControllerBase(stores, repository, invoiceRepository, invoices, codes, checkout, documents, wallets, eventApps)
+{
+    protected override bool CleanUrls => true;
+
+    [HttpGet("/")]
+    public IActionResult Root() => Redirect(Request.PathBase.Add(new PathString("/events")));
+
+    public override async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+    {
+        var appId = RouteData.Values["appId"] as string;
+        var app = appId is null ? null : await EventApps.Get(appId);
+        if (app is null)
+        {
+            context.Result = NotFound();
+            return;
+        }
+        // The store is always derived from BTCPay's mapped AppData. A query,
+        // form, or route value named storeId can never select another store.
+        TicketPublicUrl.BindMappedStore(app.StoreDataId, context.ActionArguments, context.RouteData.Values, ModelState);
+        HttpContext.SetAppData(app);
+        await base.OnActionExecutionAsync(context, next);
+    }
 }

@@ -2,6 +2,7 @@
 using BTCPayServer.Abstractions.Contracts;
 using BTCPayServer.Abstractions.Models;
 using BTCPayServer.Plugins.MakePay.EventTickets.Services;
+using BTCPayServer.Services.Apps;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -9,7 +10,7 @@ namespace BTCPayServer.Plugins.MakePay.EventTickets;
 
 public sealed class EventTicketsPlugin : BaseBTCPayServerPlugin
 {
-    public const string PluginVersion = "1.2.3";
+    public const string PluginVersion = "1.3.0";
     public const string SettingsKey = "MakePay.EventTickets.Settings";
     public const string EventsKey = "MakePay.EventTickets.Events";
     public const string OrdersKey = "MakePay.EventTickets.Orders";
@@ -21,6 +22,8 @@ public sealed class EventTicketsPlugin : BaseBTCPayServerPlugin
     public override void Execute(IServiceCollection services)
     {
         services.AddSingleton<EventTicketRepository>();
+        services.AddSingleton<EventTicketsAppService>();
+        services.AddSingleton<AppBaseType, EventTicketsAppType>();
         services.AddSingleton<TicketCodeService>();
         services.AddSingleton<TicketCheckoutService>();
         services.AddSingleton<TicketDocumentService>();

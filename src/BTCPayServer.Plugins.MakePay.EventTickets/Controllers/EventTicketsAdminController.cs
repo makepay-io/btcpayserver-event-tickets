@@ -15,13 +15,19 @@ namespace BTCPayServer.Plugins.MakePay.EventTickets.Controllers;
 [Authorize(AuthenticationSchemes = AuthenticationSchemes.Cookie, Policy = Policies.CanModifyStoreSettings)]
 [AutoValidateAntiforgeryToken]
 [Route("plugins/{storeId}/event-tickets")]
-public sealed class EventTicketsAdminController(StoreRepository stores, EventTicketRepository repository, TicketCodeService secrets) : Controller
+public sealed class EventTicketsAdminController(
+    StoreRepository stores,
+    EventTicketRepository repository,
+    TicketCodeService secrets,
+    EventTicketsAppService eventApps,
+    IAuthorizationService authorization) : Controller
 {
     [HttpGet("")]
     public async Task<IActionResult> Index(string storeId)
     {
-        if (await stores.FindStore(storeId) is null) return NotFound(); ViewData.SetActivePage("EventTickets", "Event Tickets", "Event Tickets");
-        return View("~/Views/EventTickets/Index.cshtml", new EventTicketsDashboardViewModel { StoreId = storeId, Settings = await repository.GetSettings(storeId), Events = await repository.GetEvents(storeId), Orders = (await repository.GetOrders(storeId)).Take(100).ToList(), Tickets = await repository.GetTickets(storeId) });
+        var store = await stores.FindStore(storeId); if (store is null) return NotFound();
+        ViewData.SetActivePage("EventTickets", "Event Tickets", "Event Tickets");
+        return View("~/Views/EventTickets/Index.cshtml", new EventTicketsDashboardViewModel { StoreId = storeId, Settings = await repository.GetSettings(storeId), Events = await repository.GetEvents(storeId), Orders = (await repository.GetOrders(storeId)).Take(100).ToList(), Tickets = await repository.GetTickets(storeId), MappedBaseUrl = await eventApps.GetMappedBaseUrl(storeId) });
     }
     [HttpGet("events/new")][HttpGet("events/{eventId}")]
     public async Task<IActionResult> Event(string storeId, string? eventId)
@@ -42,13 +48,14 @@ public sealed class EventTicketsAdminController(StoreRepository stores, EventTic
     [HttpGet("settings")]
     public async Task<IActionResult> Settings(string storeId)
     {
-        if (await stores.FindStore(storeId) is null) return NotFound();
+        var store = await stores.FindStore(storeId); if (store is null) return NotFound();
         await SetSettingsViewData(storeId);
         return View("~/Views/EventTickets/Settings.cshtml", await repository.GetSettings(storeId));
     }
     [HttpPost("settings")]
     public async Task<IActionResult> SaveSettings(string storeId, EventTicketSettings posted, string? resendApiKey, IFormFile? appleP12, string? appleP12Password, string? googleServiceAccountJson, CancellationToken cancellationToken)
     {
+        var existing = await repository.GetSettings(storeId);
         posted.GoogleTagManagerContainerId = posted.GoogleTagManagerContainerId?.Trim().ToUpperInvariant();
         posted.GoogleAnalyticsMeasurementId = posted.GoogleAnalyticsMeasurementId?.Trim().ToUpperInvariant();
         // Inactive provider fields are retained for convenient switching, but must not
@@ -61,11 +68,13 @@ public sealed class EventTicketsAdminController(StoreRepository stores, EventTic
             ModelState.AddModelError(nameof(posted.GoogleTagManagerContainerId), "A Google Tag Manager container ID is required for this provider.");
         if (posted.AnalyticsProvider == AnalyticsProvider.GoogleAnalytics && string.IsNullOrWhiteSpace(posted.GoogleAnalyticsMeasurementId))
             ModelState.AddModelError(nameof(posted.GoogleAnalyticsMeasurementId), "A GA4 measurement ID is required for this provider.");
-        var existing = await repository.GetSettings(storeId); posted.ProtectedResendApiKey = string.IsNullOrWhiteSpace(resendApiKey) ? existing.ProtectedResendApiKey : secrets.Protect(resendApiKey);
+        posted.ProtectedResendApiKey = string.IsNullOrWhiteSpace(resendApiKey) ? existing.ProtectedResendApiKey : secrets.Protect(resendApiKey);
         posted.ProtectedAppleP12 = existing.ProtectedAppleP12; posted.ProtectedAppleP12Password = existing.ProtectedAppleP12Password; posted.ProtectedGoogleServiceAccountJson = string.IsNullOrWhiteSpace(googleServiceAccountJson) ? existing.ProtectedGoogleServiceAccountJson : secrets.Protect(googleServiceAccountJson);
         if (appleP12 is not null) { if (appleP12.Length > 1024 * 1024) ModelState.AddModelError("appleP12", "Apple certificate must be smaller than 1 MB."); else { using var memory = new MemoryStream(); await appleP12.CopyToAsync(memory, cancellationToken); posted.ProtectedAppleP12 = secrets.Protect(Convert.ToBase64String(memory.ToArray())); posted.ProtectedAppleP12Password = secrets.Protect(appleP12Password ?? ""); } }
         if (!ModelState.IsValid) { await SetSettingsViewData(storeId); return View("~/Views/EventTickets/Settings.cshtml", posted); }
-        await repository.SaveSettings(storeId, posted); TempData.SetStatusMessageModel(new() { Severity = StatusMessageModel.StatusSeverity.Success, Message = "Event ticket settings saved." }); return RedirectToAction(nameof(Settings), new { storeId });
+        if (await stores.FindStore(storeId) is null) return NotFound();
+        await repository.SaveSettings(storeId, posted);
+        TempData.SetStatusMessageModel(new() { Severity = StatusMessageModel.StatusSeverity.Success, Message = "Event ticket settings saved." }); return RedirectToAction(nameof(Settings), new { storeId });
     }
     [HttpGet("scanner")]
     public IActionResult Scanner(string storeId) { ViewData["StoreId"] = storeId; return View("~/Views/EventTickets/Scanner.cshtml"); }
@@ -79,7 +88,33 @@ public sealed class EventTicketsAdminController(StoreRepository stores, EventTic
     private async Task SetSettingsViewData(string storeId)
     {
         ViewData["StoreId"] = storeId;
+        var store = await stores.FindStore(storeId);
+        if (store is null) return;
+        ViewData["CanManageServerDomains"] = (await authorization.AuthorizeAsync(User, Policies.CanModifyServerSettings)).Succeeded;
+        var apps = await eventApps.GetForStore(storeId);
+        var (mappedApp, mappedDomain) = await eventApps.MappingForStore(storeId);
+        var mappedBaseUrl = await eventApps.GetMappedBaseUrl(storeId);
+        ViewData["EventTicketsApps"] = apps;
+        ViewData["MappedEventTicketsApp"] = mappedDomain is null ? null : mappedApp;
+        ViewData["MappedDomain"] = mappedDomain;
+        ViewData["MappedBaseUrl"] = mappedBaseUrl;
+        ViewData["DomainMappingWarning"] = await eventApps.MappingWarningForStore(storeId);
+        ViewData["CreateEventTicketsAppUrl"] = Url.Action("CreateApp", "UIApps",
+            new { storeId, appType = EventTicketsAppType.AppType }) ??
+            $"{Request.PathBase}/stores/{storeId}/apps/create/{EventTicketsAppType.AppType}";
         var previewEvent = (await repository.GetEvents(storeId)).FirstOrDefault(item => item.Published);
-        ViewData["PreviewEventUrl"] = previewEvent is null ? null : Url.Action("Event", "EventTicketsPublic", new { storeId, eventId = previewEvent.Slug });
+        ViewData["PreviewEventSlug"] = previewEvent?.Slug;
+        var legacyPath = previewEvent is null
+            ? Url.Action(nameof(EventTicketsPublicControllerBase.Storefront), TicketPublicUrl.LegacyController, new { storeId })
+            : Url.Action(nameof(EventTicketsPublicControllerBase.Event), TicketPublicUrl.LegacyController,
+                new { storeId, eventId = previewEvent.Slug });
+        var canonicalUrl = mappedBaseUrl is null
+            ? TicketPublicUrl.ToAbsoluteHttpUrl(legacyPath ?? TicketPublicUrl.PublicPath(false, storeId),
+                Request.Scheme, Request.Host.Value)
+            : mappedBaseUrl + (previewEvent is null
+                ? TicketPublicUrl.PublicPath(true, storeId)
+                : TicketPublicUrl.EventPath(true, storeId, previewEvent.Slug));
+        ViewData["PreviewEventUrl"] = canonicalUrl;
+        ViewData["CanonicalPublicUrl"] = canonicalUrl;
     }
 }

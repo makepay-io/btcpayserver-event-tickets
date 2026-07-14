@@ -19,10 +19,10 @@
             <h1>This reservation has ended</h1>
             <p class="et-section-copy">Your tickets were released. Rebuy reserves the same selection in a fresh session.</p>
             <div class="et-restart-actions">
-                <form method="post" asp-action="Rebuy" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
+                <form method="post" asp-action="Rebuy" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
                     <button class="et-primary" type="submit" data-loading-title="Reserving your tickets…" data-loading-message="We are creating a fresh reservation with your previous selection.">Rebuy tickets</button>
                 </form>
-                <a class="et-secondary" asp-action="Event" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug">Choose different tickets</a>
+                <a class="et-secondary" asp-action="Event" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug">Choose different tickets</a>
             </div>
         </section>
     }
@@ -45,7 +45,7 @@
             </div>
             @if (!string.IsNullOrWhiteSpace(Model.Settings.PromoCode) && Model.Settings.PromoPercent > 0)
             {
-                <form class="et-promo-card" method="post" asp-action="ApplyPromotion" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
+                <form class="et-promo-card" method="post" asp-action="ApplyPromotion" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
                     <h3>Have a promotion code?</h3>
                     <p>@Model.Settings.PromoDescription</p>
                     @if (!string.IsNullOrWhiteSpace(Model.PromoMessage)) { <div class="@(Model.Order.PromoCode is null ? "et-validation" : "")">@Model.PromoMessage</div> }
@@ -58,8 +58,8 @@
                 <div class="et-summary-row total"><span>Total</span><strong>@Model.Order.Total.ToString("0.##") @Model.Order.Currency</strong></div>
             </div>
             <div class="et-actions">
-                <a class="et-secondary" asp-action="@(Model.Order.PosMode ? "Pos" : "Event")" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug">Back</a>
-                <a class="et-primary" data-et-requires-session data-begin-checkout asp-action="Details" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">Continue</a>
+                <a class="et-secondary" asp-action="@(Model.Order.PosMode ? "Pos" : "Event")" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug">Back</a>
+                <a class="et-primary" data-et-requires-session data-begin-checkout asp-action="Details" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">Continue</a>
             </div>
         </section>
         <partial name="~/Views/EventTickets/Public/_Footer.cshtml" model="Model.Settings" />

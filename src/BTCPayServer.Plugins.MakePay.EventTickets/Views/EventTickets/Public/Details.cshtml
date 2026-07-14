@@ -19,16 +19,16 @@
             <h1>This reservation has ended</h1>
             <p class="et-section-copy">Your tickets were released before checkout was completed. Rebuy reserves the same selection again and restores the details saved in this browser.</p>
             <div class="et-restart-actions">
-                <form method="post" asp-action="Rebuy" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
+                <form method="post" asp-action="Rebuy" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
                     <button class="et-primary" type="submit" data-loading-title="Reserving your tickets…" data-loading-message="We are creating a fresh reservation with your previous selection.">Rebuy tickets</button>
                 </form>
-                <a class="et-secondary" asp-action="Event" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug">Choose different tickets</a>
+                <a class="et-secondary" asp-action="Event" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug">Choose different tickets</a>
             </div>
         </section>
     }
     else
     {
-        <form method="post" data-et-checkout-form asp-action="CreatePayment" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
+        <form method="post" data-et-checkout-form asp-action="CreatePayment" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
             <div asp-validation-summary="All" class="et-alert"></div>
             <section>
                 <h1 class="et-section-heading">Billing details</h1>
@@ -81,7 +81,7 @@
                 </label>
                 <button class="et-primary et-continue" type="submit" data-et-requires-session>Proceed to payment · @Model.Order.Total.ToString("0.##") @Model.Order.Currency</button>
             </section>
-            <div class="et-actions"><a class="et-secondary" asp-action="Cart" asp-route-storeId="@Model.StoreId" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">Back to cart</a></div>
+            <div class="et-actions"><a class="et-secondary" asp-action="Cart" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">Back to cart</a></div>
         </form>
         <partial name="~/Views/EventTickets/Public/_Footer.cshtml" model="Model.Settings" />
     }
