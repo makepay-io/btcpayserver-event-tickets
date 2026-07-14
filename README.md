@@ -2,6 +2,8 @@
 
 A self-hosted event storefront, ticket delivery system, POS, and QR check-in workflow that turns paid BTCPay invoices into customer tickets.
 
+Version 1.2.2 adds an in-product custom-domain guide with the live canonical ticket URL, safe DNS/TLS instructions for BTCPay Docker operators, and an explicit explanation of the current clean-path limitation.
+
 ## Features
 
 - Branded responsive event shop with editable logo, favicon, hero artwork, colors, typography, copy, and a fullscreen live editor covering every checkout state.
@@ -43,6 +45,18 @@ Apple Wallet requires a Pass Type Identifier, Apple Team Identifier, and its `.p
 ## Storefront favicon
 
 Set **Browser favicon URL** under **Event Tickets → Experience settings → Brand & storefront**. Use an absolute HTTP(S) URL to a square ICO, PNG, or SVG asset. The configured icon is emitted consistently on the event directory, ticket selection, cart, attendee checkout, BTCPay payment, and protected order pages; leaving the field empty emits no favicon link.
+
+## Custom domains
+
+The **Use your own domain** guide in Event Tickets settings shows the current canonical ticket URL, a branded-host example, the Docker command shape, and links to BTCPay's official domain documentation.
+
+DNS and TLS cannot be provisioned by the plugin: the domain owner or BTCPay server operator must point the hostname to the server, keep every existing entry when adding it to `BTCPAY_ADDITIONAL_HOSTS`, and rerun `btcpay-setup.sh`. Verify DNS before requesting the certificate, because an unresolved additional hostname can interfere with Let's Encrypt renewal for the other configured names.
+
+`BTCPAY_ADDITIONAL_HOSTS` aliases the entire BTCPay Server, not only this store. Other BTCPay pages and store-scoped public routes remain reachable through that hostname, so it must not be treated as domain-to-store isolation.
+
+Adding a hostname changes the host but does not remove the current `/stores/{storeId}/events` prefix. Event Tickets is store-scoped rather than a BTCPay App, so a clean route such as `https://tickets.example.com/events/event-slug` needs a future native host-aware route integration or a complete external reverse-proxy/CDN configuration. A dedicated ticket subdomain is recommended; an apex domain that already serves a website must have its existing proxy own the `/events` routing and every dependent checkout, asset, modal, callback, PDF, and wallet route.
+
+Official references: [Docker domain settings](https://docs.btcpayserver.org/Docker/#environment-variables), [BTCPay App domain mapping](https://docs.btcpayserver.org/FAQ/Apps/#how-to-map-a-domain-name-to-an-app), and [external reverse-proxy requirements](https://docs.btcpayserver.org/FAQ/Deployment/#can-i-use-an-existing-nginx-server-as-a-reverse-proxy-with-ssl-termination).
 
 ## Build and test
 
