@@ -211,6 +211,26 @@ public class TicketTests
     }
 
     [Fact]
+    public void StoreNavigationUsesBundledCurrentColorQrCodeIcon()
+    {
+        var navigation = File.ReadAllText(RepositoryFile(
+            "src", "BTCPayServer.Plugins.MakePay.EventTickets", "Views", "Shared", "EventTickets", "StoreNavExtension.cshtml"));
+        var sprite = File.ReadAllText(RepositoryFile(
+            "submodules", "btcpayserver", "BTCPayServer", "wwwroot", "img", "icon-sprite.svg"));
+
+        Assert.Contains("<vc:icon symbol=\"qr-code\" />", navigation, StringComparison.Ordinal);
+        Assert.DoesNotContain("<img", navigation, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("<svg", navigation, StringComparison.OrdinalIgnoreCase);
+
+        var symbolStart = sprite.IndexOf("<symbol id=\"qr-code\"", StringComparison.Ordinal);
+        Assert.True(symbolStart >= 0, "BTCPay's bundled icon sprite must contain the QR code symbol.");
+        var symbolEnd = sprite.IndexOf("</symbol>", symbolStart, StringComparison.Ordinal);
+        Assert.True(symbolEnd > symbolStart, "The bundled QR code symbol must be complete.");
+        var qrCodeSymbol = sprite[symbolStart..(symbolEnd + "</symbol>".Length)];
+        Assert.Contains("currentColor", qrCodeSymbol, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AnalyticsItemsMapPublicTicketVariantWithoutCustomerData()
     {
         var item = Event();

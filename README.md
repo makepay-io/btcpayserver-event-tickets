@@ -2,6 +2,8 @@
 
 A self-hosted event storefront, ticket delivery system, POS, and QR check-in workflow that turns paid BTCPay invoices into customer tickets.
 
+Version 1.3.1 adds a native QR-code sidebar icon that follows BTCPay's light, dark, hover, and active navigation states.
+
 Version 1.3.0 adds native BTCPay App domain mapping, clean branded ticket URLs, and an in-product setup guide with safe DNS/TLS instructions for BTCPay Docker operators.
 
 ## Features
