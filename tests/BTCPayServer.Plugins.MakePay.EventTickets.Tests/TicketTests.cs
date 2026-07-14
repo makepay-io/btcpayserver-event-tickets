@@ -312,6 +312,28 @@ public class TicketTests
         Assert.DoesNotContain("*", TicketAnalytics.GoogleConnectSources);
     }
 
+    [Fact]
+    public void CustomDomainGuideSeparatesPluginRoutesFromServerOwnedDnsAndTls()
+    {
+        var settings = File.ReadAllText(RepositoryFile(
+            "src",
+            "BTCPayServer.Plugins.MakePay.EventTickets",
+            "Views",
+            "EventTickets",
+            "Settings.cshtml"));
+
+        Assert.Contains("Use your own domain", settings, StringComparison.Ordinal);
+        Assert.Contains("Server administrator required", settings, StringComparison.Ordinal);
+        Assert.Contains("BTCPAY_ADDITIONAL_HOSTS", settings, StringComparison.Ordinal);
+        Assert.Contains("DNS alone does not remove the store ID", settings, StringComparison.Ordinal);
+        Assert.Contains("not registered as a BTCPay App", settings, StringComparison.Ordinal);
+        Assert.Contains("Let's Encrypt", settings, StringComparison.Ordinal);
+        Assert.Contains("aliases the whole BTCPay Server, not only this store", settings, StringComparison.Ordinal);
+        Assert.Contains("rel=\"noopener noreferrer\"", settings, StringComparison.Ordinal);
+        Assert.Contains("docs.btcpayserver.org/FAQ/Apps/", settings, StringComparison.Ordinal);
+        Assert.Contains("docs.btcpayserver.org/FAQ/Deployment/", settings, StringComparison.Ordinal);
+    }
+
     private static TicketCheckoutService Checkout(out TicketCodeService codes)
     {
         codes = new TicketCodeService(new EphemeralDataProtectionProvider());
