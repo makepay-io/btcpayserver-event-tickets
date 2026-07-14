@@ -4,7 +4,7 @@ A self-hosted event storefront, ticket delivery system, POS, and QR check-in wor
 
 ## Features
 
-- Branded responsive event shop with editable logo, hero artwork, colors, typography, copy, and a fullscreen live editor covering every checkout state.
+- Branded responsive event shop with editable logo, favicon, hero artwork, colors, typography, copy, and a fullscreen live editor covering every checkout state.
 - Multi-ticket cart, promotional pricing, buyer and attendee details, reservation countdowns, and the official BTCPay JavaScript modal (`/modal/btcpay.js` + `showInvoice`) with invoices created server-side.
 - Protected post-payment order pages with downloadable multi-page PDF tickets, one real QR code per attendee, and the same secure link delivered by email.
 - Multiple ticket types, capacity controls, quantity limits, draft/published events, and an event-specific POS view.
@@ -39,6 +39,10 @@ The configured GTM container is merchant-controlled JavaScript and can technical
 ## Wallet setup
 
 Apple Wallet requires a Pass Type Identifier, Apple Team Identifier, and its `.p12` signing certificate/password. Google Wallet requires an issuer ID, an existing Generic Pass class ID, and service-account JSON authorized for that issuer. Wallet secrets are encrypted with BTCPay Server data protection.
+
+## Storefront favicon
+
+Set **Browser favicon URL** under **Event Tickets → Experience settings → Brand & storefront**. Use an absolute HTTP(S) URL to a square ICO, PNG, or SVG asset. The configured icon is emitted consistently on the event directory, ticket selection, cart, attendee checkout, BTCPay payment, and protected order pages; leaving the field empty emits no favicon link.
 
 ## Build and test
 

@@ -1,5 +1,15 @@
 @model EventTicketSettings
+@{
+    var faviconUrl = Uri.TryCreate(Model.FaviconUrl, UriKind.Absolute, out var faviconUri) &&
+        (faviconUri.Scheme == Uri.UriSchemeHttp || faviconUri.Scheme == Uri.UriSchemeHttps)
+            ? Model.FaviconUrl
+            : null;
+}
 <meta name="referrer" content="no-referrer">
+@if (faviconUrl is not null)
+{
+    <link rel="icon" href="@faviconUrl">
+}
 @{
     var font = Model.FontStyle switch
     {
