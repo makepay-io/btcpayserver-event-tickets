@@ -21,10 +21,18 @@ public enum TicketFontStyle
 
 public sealed class EventTicketSettings
 {
+    private string? _faviconUrl;
+
     [Required, StringLength(80)] public string StorefrontTitle { get; set; } = "Events";
     [StringLength(500)] public string StorefrontDescription { get; set; } = "Tickets paid directly through BTCPay Server.";
     [Required, StringLength(10)] public string Currency { get; set; } = "USD";
     [Url, StringLength(500)] public string? LogoUrl { get; set; }
+    [Url, StringLength(500), RegularExpression("(?i)^https?://[^\\s]+$", ErrorMessage = "Use an absolute HTTP or HTTPS favicon URL.")]
+    public string? FaviconUrl
+    {
+        get => _faviconUrl;
+        set => _faviconUrl = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
     [Url, StringLength(500)] public string? HeroImageUrl { get; set; }
     [StringLength(80)] public string HeroEyebrow { get; set; } = "MakePay Events";
     [StringLength(180)] public string HeroHeadline { get; set; } = "Built for unforgettable experiences";

@@ -156,6 +156,58 @@ public class TicketTests
     }
 
     [Fact]
+    public void FaviconUrlNormalizesWhitespaceAndRejectsNonHttpSchemes()
+    {
+        var settings = new EventTicketSettings { FaviconUrl = "  https://cdn.example.com/event-icon.png  " };
+        Assert.Equal("https://cdn.example.com/event-icon.png", settings.FaviconUrl);
+
+        var errors = new List<ValidationResult>();
+        Assert.True(Validator.TryValidateObject(settings, new ValidationContext(settings), errors, true));
+
+        foreach (var unsafeUrl in new[] { "javascript:alert(1)", "ftp://cdn.example.com/icon.ico", "data:image/svg+xml,<svg/>" })
+        {
+            settings.FaviconUrl = unsafeUrl;
+            errors.Clear();
+            Assert.False(Validator.TryValidateObject(settings, new ValidationContext(settings), errors, true));
+            Assert.Contains(errors, result => result.MemberNames.Contains(nameof(EventTicketSettings.FaviconUrl)));
+        }
+
+        settings.FaviconUrl = "   ";
+        Assert.Null(settings.FaviconUrl);
+        errors.Clear();
+        Assert.True(Validator.TryValidateObject(settings, new ValidationContext(settings), errors, true));
+    }
+
+    [Fact]
+    public void EveryPublicPageUsesSharedConditionalFaviconHead()
+    {
+        var theme = File.ReadAllText(RepositoryFile(
+            "src",
+            "BTCPayServer.Plugins.MakePay.EventTickets",
+            "Views",
+            "EventTickets",
+            "Public",
+            "_Theme.cshtml"));
+        Assert.Contains("Uri.TryCreate(Model.FaviconUrl", theme, StringComparison.Ordinal);
+        Assert.Contains("faviconUri.Scheme == Uri.UriSchemeHttp", theme, StringComparison.Ordinal);
+        Assert.Contains("faviconUri.Scheme == Uri.UriSchemeHttps", theme, StringComparison.Ordinal);
+        Assert.Contains("if (faviconUrl is not null)", theme, StringComparison.Ordinal);
+        Assert.Contains("<link rel=\"icon\" href=\"@faviconUrl\">", theme, StringComparison.Ordinal);
+
+        foreach (var view in new[] { "Storefront.cshtml", "Event.cshtml", "Cart.cshtml", "Details.cshtml", "Payment.cshtml", "Order.cshtml" })
+        {
+            var source = File.ReadAllText(RepositoryFile(
+                "src",
+                "BTCPayServer.Plugins.MakePay.EventTickets",
+                "Views",
+                "EventTickets",
+                "Public",
+                view));
+            Assert.Contains("~/Views/EventTickets/Public/_Theme.cshtml", source, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public void AnalyticsItemsMapPublicTicketVariantWithoutCustomerData()
     {
         var item = Event();

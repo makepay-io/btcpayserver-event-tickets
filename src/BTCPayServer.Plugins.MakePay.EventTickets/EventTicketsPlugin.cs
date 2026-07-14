@@ -9,7 +9,7 @@ namespace BTCPayServer.Plugins.MakePay.EventTickets;
 
 public sealed class EventTicketsPlugin : BaseBTCPayServerPlugin
 {
-    public const string PluginVersion = "1.2.0";
+    public const string PluginVersion = "1.2.1";
     public const string SettingsKey = "MakePay.EventTickets.Settings";
     public const string EventsKey = "MakePay.EventTickets.Events";
     public const string OrdersKey = "MakePay.EventTickets.Orders";
