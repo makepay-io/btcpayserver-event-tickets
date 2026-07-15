@@ -14,6 +14,22 @@ namespace BTCPayServer.Plugins.MakePay.EventTickets.Tests;
 public class TicketTests
 {
     [Fact]
+    public void ReleaseVersionMetadataIsSynchronized()
+    {
+        const string expected = "1.6.0";
+        var project = File.ReadAllText(RepositoryFile(
+            "src", "BTCPayServer.Plugins.MakePay.EventTickets", "BTCPayServer.Plugins.MakePay.EventTickets.csproj"));
+        var plugin = File.ReadAllText(RepositoryFile(
+            "src", "BTCPayServer.Plugins.MakePay.EventTickets", "EventTicketsPlugin.cs"));
+        using var package = JsonDocument.Parse(File.ReadAllText(RepositoryFile(
+            "packaging", "BTCPayServer.Plugins.MakePay.EventTickets.json")));
+
+        Assert.Contains($"<Version>{expected}</Version>", project, StringComparison.Ordinal);
+        Assert.Contains($"PluginVersion = \"{expected}\"", plugin, StringComparison.Ordinal);
+        Assert.Equal(expected + ".0", package.RootElement.GetProperty("Version").GetString());
+    }
+
+    [Fact]
     public void QrPayloadRoundTripsCode()
     {
         var code = "TKT-AAAA-BBBB-CCCC-DDDD";
@@ -72,10 +88,9 @@ public class TicketTests
     }
 
     [Fact]
-    public void ScannerCheckInIsEventScopedAndReturnsHolderAndTicketType()
+    public void ScannerLookupIsReadOnlyAndNormalizesLegacyAdmissionState()
     {
         const string code = "TKT-AAAA-BBBB-CCCC-DDDD";
-        var checkedInAt = new DateTimeOffset(2026, 7, 15, 8, 30, 0, TimeSpan.Zero);
         var item = Event();
         var ticket = new IssuedTicket
         {
@@ -83,28 +98,178 @@ public class TicketTests
             EventId = item.Id,
             TicketTypeId = "vip",
             AttendeeName = "Ada Lovelace",
-            CodeHash = TicketCodeService.Hash(code)
+            CodeHash = TicketCodeService.Hash(code),
+            CheckedInAt = new DateTimeOffset(2026, 7, 15, 8, 30, 0, TimeSpan.Zero),
+            CheckedInBy = "legacy-door",
+            CheckInGate = "North"
         };
         var tickets = new IssuedTicketCollection { Tickets = { [ticket.Id] = ticket } };
 
-        var result = EventTicketRepository.ApplyCheckIn(tickets, item, code, "door@example.com", " Main gate ", checkedInAt);
+        var result = EventTicketRepository.ApplyLookup(tickets, item, code);
 
         Assert.True(result.Success);
-        Assert.Equal("checked_in", result.Status);
+        Assert.Equal("inside", result.Status);
         Assert.Equal("Ada Lovelace", result.Attendee);
         Assert.Equal("VIP", result.TicketType);
-        Assert.Equal(checkedInAt, result.CheckedInAt);
+        Assert.True(result.IsInside);
+        Assert.Equal(1, result.EntranceCount);
+        Assert.Equal(0, ticket.EntranceCount);
+        Assert.Equal("legacy-door", ticket.CheckedInBy);
+        Assert.Null(ticket.CheckedOutAt);
+    }
+
+    [Fact]
+    public void ScannerCheckInIsExplicitAtomicAndIdempotent()
+    {
+        const string code = "TKT-AAAA-BBBB-CCCC-DDDD";
+        var checkedInAt = new DateTimeOffset(2026, 7, 15, 8, 30, 0, TimeSpan.Zero);
+        var item = Event();
+        var ticket = Ticket(item, code, "Ada Lovelace", "vip");
+        var tickets = Collection(ticket);
+
+        var result = EventTicketRepository.ApplyCheckIn(
+            tickets, item, code, "door@example.com", " Main gate ", null, "operation-1", out var changed,
+            checkedInAt);
+
+        Assert.True(result.Success);
+        Assert.True(changed);
+        Assert.Equal("checked_in", result.Status);
+        Assert.True(result.IsInside);
+        Assert.Equal(1, result.EntranceCount);
         Assert.Equal(checkedInAt, ticket.CheckedInAt);
         Assert.Equal("door@example.com", ticket.CheckedInBy);
         Assert.Equal("Main gate", ticket.CheckInGate);
+        Assert.Equal("operation-1", ticket.LastScannerOperationId);
 
-        var duplicate = EventTicketRepository.ApplyCheckIn(tickets, item, code, "second-door", null, checkedInAt.AddSeconds(1));
+        var duplicate = EventTicketRepository.ApplyCheckIn(
+            tickets, item, code, "second-door", null, null, "operation-1", out var duplicateChanged,
+            checkedInAt.AddSeconds(1));
         Assert.False(duplicate.Success);
+        Assert.False(duplicateChanged);
         Assert.Equal("duplicate", duplicate.Status);
-        Assert.Equal("Ada Lovelace", duplicate.Attendee);
-        Assert.Equal("VIP", duplicate.TicketType);
+        Assert.Equal(1, duplicate.EntranceCount);
         Assert.Equal(checkedInAt, ticket.CheckedInAt);
         Assert.Equal("door@example.com", ticket.CheckedInBy);
+    }
+
+    [Fact]
+    public void RequiredIdDecisionIsAuditedWithoutAdmittingARejectedHolder()
+    {
+        const string code = "TKT-AAAA-BBBB-CCCC-DDDD";
+        var item = Event();
+        item.RequireIdCheck = true;
+        var ticket = Ticket(item, code, "Ada Lovelace", "vip");
+        var tickets = Collection(ticket);
+        var at = new DateTimeOffset(2026, 7, 15, 8, 30, 0, TimeSpan.Zero);
+
+        var required = EventTicketRepository.ApplyCheckIn(
+            tickets, item, code, "door@example.com", "Main", null, "required", out var requiredChanged, at);
+
+        Assert.False(required.Success);
+        Assert.False(requiredChanged);
+        Assert.Equal("id_check_required", required.Status);
+        Assert.True(required.RequireIdCheck);
+        Assert.False(required.IsInside);
+        Assert.Null(ticket.CheckedInAt);
+
+        var rejected = EventTicketRepository.ApplyCheckIn(
+            tickets, item, code, "door@example.com", "Main", false, "reject-1", out var rejectedChanged,
+            at.AddSeconds(1));
+
+        Assert.False(rejected.Success);
+        Assert.True(rejectedChanged);
+        Assert.Equal("id_rejected", rejected.Status);
+        Assert.False(rejected.IsInside);
+        Assert.Equal(0, rejected.EntranceCount);
+        Assert.Equal(1, rejected.IdRejectedCount);
+        Assert.Equal(0, rejected.IdConfirmedCount);
+        Assert.False(ticket.LastIdCheckConfirmed);
+        Assert.Null(ticket.CheckedInAt);
+
+        var retriedRejection = EventTicketRepository.ApplyCheckIn(
+            tickets, item, code, "door@example.com", "Main", false, "reject-1", out var retryChanged,
+            at.AddSeconds(2));
+        Assert.False(retryChanged);
+        Assert.Equal("id_rejected", retriedRejection.Status);
+        Assert.Equal(1, ticket.IdRejectedCount);
+
+        var admitted = EventTicketRepository.ApplyCheckIn(
+            tickets, item, code, "door@example.com", "Main", true, "admit-1", out var admittedChanged,
+            at.AddSeconds(3));
+        Assert.True(admitted.Success);
+        Assert.True(admittedChanged);
+        Assert.True(admitted.IsInside);
+        Assert.Equal(1, admitted.EntranceCount);
+        Assert.Equal(1, admitted.IdConfirmedCount);
+        Assert.Equal(1, admitted.IdRejectedCount);
+        Assert.True(ticket.LastIdCheckConfirmed);
+    }
+
+    [Fact]
+    public void CheckOutAllowsReEntryAndCountsEveryEntrance()
+    {
+        const string code = "TKT-AAAA-BBBB-CCCC-DDDD";
+        var item = Event();
+        var ticket = Ticket(item, code, "Grace Hopper", "general");
+        var tickets = Collection(ticket);
+        var firstEntry = new DateTimeOffset(2026, 7, 15, 8, 30, 0, TimeSpan.Zero);
+
+        _ = EventTicketRepository.ApplyCheckIn(
+            tickets, item, code, "door-a", "North", null, "entry-1", out var entered, firstEntry);
+        var checkout = EventTicketRepository.ApplyCheckOut(
+            tickets, item, code, "door-a", " Exit A ", "exit-1", out var checkedOut,
+            firstEntry.AddHours(1));
+
+        Assert.True(entered);
+        Assert.True(checkedOut);
+        Assert.True(checkout.Success);
+        Assert.Equal("checked_out", checkout.Status);
+        Assert.False(checkout.IsInside);
+        Assert.Equal(1, checkout.EntranceCount);
+        Assert.Equal("door-a", ticket.CheckedOutBy);
+        Assert.Equal("Exit A", ticket.CheckOutGate);
+
+        var duplicateCheckout = EventTicketRepository.ApplyCheckOut(
+            tickets, item, code, "door-b", null, "exit-1", out var duplicateChanged,
+            firstEntry.AddHours(1).AddSeconds(1));
+        Assert.False(duplicateCheckout.Success);
+        Assert.False(duplicateChanged);
+        Assert.Equal("not_checked_in", duplicateCheckout.Status);
+        Assert.Equal(1, ticket.EntranceCount);
+
+        var reentry = EventTicketRepository.ApplyCheckIn(
+            tickets, item, code, "door-b", "South", null, "entry-2", out var reentered,
+            firstEntry.AddHours(2));
+        Assert.True(reentered);
+        Assert.True(reentry.Success);
+        Assert.True(reentry.IsInside);
+        Assert.Equal(2, reentry.EntranceCount);
+        Assert.Equal(2, ticket.EntranceCount);
+        Assert.Equal("South", ticket.CheckInGate);
+    }
+
+    [Fact]
+    public void LegacyCheckedInTicketCanCheckOutAndReEnterWithoutMigration()
+    {
+        const string code = "TKT-AAAA-BBBB-CCCC-DDDD";
+        var item = Event();
+        var legacyEntry = new DateTimeOffset(2026, 7, 15, 8, 0, 0, TimeSpan.Zero);
+        var ticket = Ticket(item, code, "Legacy Holder", "general");
+        ticket.CheckedInAt = legacyEntry;
+        ticket.EntranceCount = 0;
+        var tickets = Collection(ticket);
+
+        var checkout = EventTicketRepository.ApplyCheckOut(
+            tickets, item, code, "door", null, "legacy-exit", out var checkedOut, legacyEntry.AddHours(1));
+        Assert.True(checkedOut);
+        Assert.Equal(1, checkout.EntranceCount);
+        Assert.Equal(1, ticket.EntranceCount);
+
+        var reentry = EventTicketRepository.ApplyCheckIn(
+            tickets, item, code, "door", null, null, "legacy-reentry", out var reentered,
+            legacyEntry.AddHours(2));
+        Assert.True(reentered);
+        Assert.Equal(2, reentry.EntranceCount);
     }
 
     [Fact]
@@ -113,23 +278,25 @@ public class TicketTests
         const string code = "TKT-AAAA-BBBB-CCCC-DDDD";
         var requestedEvent = Event();
         requestedEvent.Id = "other-event";
-        var ticket = new IssuedTicket
+        var ticket = Ticket(Event(), code, "Ada Lovelace", "vip");
+        var tickets = Collection(ticket);
+
+        var lookup = EventTicketRepository.ApplyLookup(tickets, requestedEvent, code);
+        var checkIn = EventTicketRepository.ApplyCheckIn(
+            tickets, requestedEvent, code, "door@example.com", null, null, "wrong-in", out var checkInChanged);
+        var checkOut = EventTicketRepository.ApplyCheckOut(
+            tickets, requestedEvent, code, "door@example.com", null, "wrong-out", out var checkOutChanged);
+
+        foreach (var result in new[] { lookup, checkIn, checkOut })
         {
-            Id = "ticket-1",
-            EventId = "event",
-            TicketTypeId = "vip",
-            AttendeeName = "Ada Lovelace",
-            CodeHash = TicketCodeService.Hash(code)
-        };
-        var tickets = new IssuedTicketCollection { Tickets = { [ticket.Id] = ticket } };
-
-        var result = EventTicketRepository.ApplyCheckIn(tickets, requestedEvent, code, "door@example.com", null);
-
-        Assert.False(result.Success);
-        Assert.Equal("wrong_event", result.Status);
-        Assert.Null(result.TicketId);
-        Assert.Null(result.Attendee);
-        Assert.Null(result.TicketType);
+            Assert.False(result.Success);
+            Assert.Equal("wrong_event", result.Status);
+            Assert.Null(result.TicketId);
+            Assert.Null(result.Attendee);
+            Assert.Null(result.TicketType);
+        }
+        Assert.False(checkInChanged);
+        Assert.False(checkOutChanged);
         Assert.Null(ticket.CheckedInAt);
         Assert.Null(ticket.CheckedInBy);
     }
@@ -139,26 +306,26 @@ public class TicketTests
     {
         const string code = "TKT-AAAA-BBBB-CCCC-DDDD";
         var item = Event();
-        var ticket = new IssuedTicket
-        {
-            Id = "ticket-1",
-            EventId = item.Id,
-            TicketTypeId = "general",
-            AttendeeName = "Grace Hopper",
-            CodeHash = TicketCodeService.Hash(code),
-            Revoked = true
-        };
-        var tickets = new IssuedTicketCollection { Tickets = { [ticket.Id] = ticket } };
+        var ticket = Ticket(item, code, "Grace Hopper", "general");
+        ticket.Revoked = true;
+        var tickets = Collection(ticket);
 
-        var revoked = EventTicketRepository.ApplyCheckIn(tickets, item, code, "door@example.com", null);
-        var unknown = EventTicketRepository.ApplyCheckIn(tickets, item, "TKT-NOT-A-TICKET", "door@example.com", null);
+        var revokedLookup = EventTicketRepository.ApplyLookup(tickets, item, code);
+        var revoked = EventTicketRepository.ApplyCheckIn(
+            tickets, item, code, "door@example.com", null, null, "revoked", out var revokedChanged);
+        var unknown = EventTicketRepository.ApplyCheckOut(
+            tickets, item, "TKT-NOT-A-TICKET", "door@example.com", null, "unknown", out var unknownChanged);
 
+        Assert.False(revokedLookup.Success);
+        Assert.Equal("revoked", revokedLookup.Status);
         Assert.False(revoked.Success);
         Assert.Equal("revoked", revoked.Status);
         Assert.Equal("Grace Hopper", revoked.Attendee);
         Assert.Equal("General", revoked.TicketType);
+        Assert.False(revokedChanged);
         Assert.False(unknown.Success);
         Assert.Equal("not_found", unknown.Status);
+        Assert.False(unknownChanged);
         Assert.Null(ticket.CheckedInAt);
     }
 
@@ -885,6 +1052,20 @@ public class TicketTests
         codes = new TicketCodeService(new EphemeralDataProtectionProvider());
         return new TicketCheckoutService(codes);
     }
+
+    private static IssuedTicket Ticket(TicketEvent item, string code, string attendee, string ticketTypeId) => new()
+    {
+        Id = "ticket-1",
+        EventId = item.Id,
+        TicketTypeId = ticketTypeId,
+        AttendeeName = attendee,
+        CodeHash = TicketCodeService.Hash(code)
+    };
+
+    private static IssuedTicketCollection Collection(IssuedTicket ticket) => new()
+    {
+        Tickets = { [ticket.Id] = ticket }
+    };
 
     private static string RepositoryFile(params string[] segments)
     {

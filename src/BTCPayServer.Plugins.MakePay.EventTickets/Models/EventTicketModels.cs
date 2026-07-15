@@ -121,6 +121,7 @@ public sealed class TicketEvent
     public DateTimeOffset EndsAt { get; set; } = DateTimeOffset.UtcNow.AddDays(30).AddHours(3);
     [Url, StringLength(500)] public string? BannerUrl { get; set; }
     public bool Published { get; set; } = true;
+    public bool RequireIdCheck { get; set; }
     public List<TicketType> TicketTypes { get; set; } = [];
     public string? ProtectedScannerAccessToken { get; set; }
     public string? ScannerAccessTokenHash { get; set; }
@@ -206,6 +207,16 @@ public sealed class IssuedTicket
     public DateTimeOffset? CheckedInAt { get; set; }
     public string? CheckedInBy { get; set; }
     public string? CheckInGate { get; set; }
+    public DateTimeOffset? CheckedOutAt { get; set; }
+    public string? CheckedOutBy { get; set; }
+    public string? CheckOutGate { get; set; }
+    public long EntranceCount { get; set; }
+    public long IdConfirmedCount { get; set; }
+    public long IdRejectedCount { get; set; }
+    public DateTimeOffset? LastIdCheckedAt { get; set; }
+    public string? LastIdCheckedBy { get; set; }
+    public bool? LastIdCheckConfirmed { get; set; }
+    public string? LastScannerOperationId { get; set; }
     public bool Revoked { get; set; }
 }
 
@@ -266,6 +277,8 @@ public sealed class EventScannerViewModel
     public required string StoreId { get; init; }
     public required EventTicketSettings Settings { get; init; }
     public required TicketEvent Event { get; init; }
+    public required string LookupUrl { get; init; }
+    public required string ActionUrl { get; init; }
     public required string CheckInUrl { get; init; }
     public required string EventUrl { get; init; }
     public bool CleanUrls { get; init; }
@@ -317,5 +330,22 @@ public sealed class TicketOrderViewModel
 }
 
 public sealed record TicketPaymentStatus(string Status, string? RedirectUrl, string Message);
-public sealed record CheckInResult(bool Success, string Status, string? TicketId, string? Attendee, string? TicketType, DateTimeOffset? CheckedInAt, string Message);
-public sealed record ScannerCheckInRequest(string Code, string? Gate);
+public sealed record CheckInResult(
+    bool Success,
+    string Status,
+    string? TicketId,
+    string? Attendee,
+    string? TicketType,
+    DateTimeOffset? CheckedInAt,
+    string Message,
+    DateTimeOffset? CheckedOutAt = null,
+    bool IsInside = false,
+    bool RequireIdCheck = false,
+    long EntranceCount = 0,
+    long IdConfirmedCount = 0,
+    long IdRejectedCount = 0,
+    string? LastGate = null);
+public sealed record ScannerLookupRequest(string Code);
+public sealed record ScannerCheckInRequest(string Code, string? Gate, bool? IdCheckConfirmed = null, string? OperationId = null);
+public sealed record ScannerCheckOutRequest(string Code, string? Gate, string? OperationId = null);
+public sealed record ScannerActionRequest(string Code, string? Gate, string Action, bool? IdConfirmed = null, string? OperationId = null);

@@ -1,8 +1,10 @@
 # MakePay Event Tickets for BTCPay Server
 
-A self-hosted event storefront, ticket delivery system, POS, and QR check-in workflow that turns paid BTCPay invoices into customer tickets.
+A self-hosted event storefront, ticket delivery system, POS, and QR admission workflow that turns paid BTCPay invoices into customer tickets.
 
-Version 1.5.0 replaces the global admin scanner with protected, per-event public scanner pages optimized for repeated mobile check-in. Each scanner validates only its event, shows the ticket holder and ticket type, supports camera, saved-image, and manual entry, and closes results automatically after a store-configurable delay (five seconds by default).
+Version 1.6.0 turns the protected per-event scanner into a complete door-state workflow. A scan is read-only until staff explicitly checks the holder in or confirms check-out, re-entry is supported and counted, events can require a staff-confirmed photo-ID decision, and confirmed/rejected ID checks are audited per ticket. The dashboard opens each scanner from a share dialog with a QR code, copyable link, direct open action, and link rotation warning.
+
+Version 1.5.0 replaced the global admin scanner with protected, per-event public scanner pages optimized for repeated mobile check-in. Each scanner validates only its event, shows the ticket holder and ticket type, supports camera, saved-image, and manual entry, and closes results automatically after a store-configurable delay (five seconds by default).
 
 Version 1.4.0 brings the Event Tickets dashboard, settings workspace, live editor, and public event directory in line with the Digital Products experience. It also hardens invoice-backed reservation expiry, ended-event and sold-out handling, pending-order refresh, non-cacheable customer pages, consent-aware analytics replay, saved attendee details, BTCPay modal recovery, responsive behavior, and enforced MakePay attribution.
 
@@ -18,7 +20,7 @@ Version 1.3.0 adds native BTCPay App domain mapping, clean branded ticket URLs, 
 - Multiple ticket types, capacity controls, quantity limits, draft/published events, and an event-specific POS view.
 - Atomic inventory reservations and automatic release when reservations or invoices expire or become invalid.
 - Cryptographically random ticket codes stored as one-way hashes with encrypted recoverable values.
-- Per-event, mobile-first camera QR scanner with a protected capability link, manual and saved-image fallbacks, atomic first check-in, attendee and ticket-type results, duplicate/revoked/wrong-event responses, and configurable automatic result closing.
+- Per-event, mobile-first camera QR scanner with a protected capability link, manual and saved-image fallbacks, read-only lookup followed by atomic check-in or confirmed check-out, attendee and ticket-type results, re-entry and entrance counts, optional staff-confirmed photo-ID decisions, audited ID confirmation/rejection counts, and configurable automatic result closing.
 - Adjustable HTML email through Resend or BTCPay store SMTP, with an attached standards-compliant PDF ticket document.
 - Apple Wallet `.pkpass` generation with merchant-provided Pass Type certificate and Google Wallet signed save links with a service account.
 - Configurable privacy/terms links, attendee notice, optional phone/country/company fields, confirmation copy, and Resend or SMTP delivery templates.
@@ -71,7 +73,9 @@ BTCPay supplies the mapped App ID to the plugin's clean controller through `Doma
 
 The mapped hostname root redirects to `/events`. BTCPay deployments configured below a root path preserve it consistently, for example `https://tickets.example.com/btcpay/events`. Every generated public link uses the mapped host and clean path, including invoice return metadata, email delivery, payment polling, protected order pages, rebuy, PDFs, wallet passes, and each event's scanner. BTCPay resolves the first exact hostname row, so duplicate rows must be removed; a later conflicting row is inactive.
 
-Each dashboard event row has its own **Scanner** link. Treat this URL as a staff credential: opening it exchanges the protected query token for a renewable 12-hour, HttpOnly, event-path-scoped cookie and immediately redirects to a token-free URL. **Rotate** invalidates every previous link and scanner session for that event. The standalone scanner is excluded from storefront analytics and search indexing and only accepts tickets issued for that event.
+Each dashboard event row has a **Scanner** action that opens a share dialog. The dialog shows a QR code for staff devices, a copyable protected URL, and **Open scanner**. Treat the URL as a staff credential: opening it exchanges the protected query token for a renewable 12-hour, HttpOnly, event-path-scoped cookie and immediately redirects to a token-free URL. The dialog also contains **Rotate scanner link** with an explicit warning that rotation invalidates every previous link and scanner session for that event; rotation is deliberately absent from the event table's quick actions.
+
+Scanning a code first performs a read-only lookup. Staff then explicitly chooses **Check in** or, for a holder currently inside, confirms **Check out**. Check-out marks the holder outside so the same ticket can be admitted again; each successful admission increments its entrance count. When **Require photo ID check at admission** is enabled on an event, staff must confirm that the ID matches or record a rejection before admission. ID confirmations and rejections are counted per ticket for operational review. A rejected ID decision never admits the holder, and check-out never requires another ID decision. The standalone scanner is excluded from storefront analytics and search indexing and only accepts tickets issued for its event.
 
 Existing `/stores/{storeId}/events/…` routes remain available for compatibility. Once a mapping exists, safe GET and HEAD requests redirect permanently to the canonical hostname while POST requests remain on their submitted origin, avoiding an unsafe cross-host form replay.
 

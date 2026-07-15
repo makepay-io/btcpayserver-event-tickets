@@ -90,10 +90,55 @@ public abstract class EventTicketsPublicControllerBase(
             StoreId = storeId,
             Settings = settings,
             Event = item,
+            LookupUrl = PublicAction(nameof(ScannerLookup), new { storeId, eventId = item.Slug }) ?? "",
+            ActionUrl = PublicAction(nameof(ScannerAction), new { storeId, eventId = item.Slug }) ?? "",
             CheckInUrl = PublicAction(nameof(ScannerCheckIn), new { storeId, eventId = item.Slug }) ?? "",
             EventUrl = PublicAction(nameof(Event), new { storeId, eventId = item.Slug }) ?? "",
             CleanUrls = CleanUrls
         });
+    }
+
+    [HttpPost("{eventId}/scanner/lookup")]
+    [ValidateAntiForgeryToken]
+    [TicketNoStore]
+    public async Task<IActionResult> ScannerLookup(string storeId, string eventId, [FromBody] ScannerLookupRequest? request)
+    {
+        PrepareScannerResponse();
+        var item = await repository.GetEvent(storeId, eventId);
+        if (item is null) return NotFound();
+        var scannerSession = Request.Cookies[TicketCodeService.ScannerSessionCookieName];
+        if (!TicketCodeService.CanAccessScanner(item, scannerSession))
+            return Unauthorized(ScannerUnauthorized());
+        SetScannerSessionCookie(storeId, item.Slug, scannerSession!);
+        if (request is null || string.IsNullOrWhiteSpace(request.Code))
+            return BadRequest(ScannerMissing());
+        if (request.Code.Length > 512)
+            return BadRequest(ScannerInvalid());
+
+        // Lookup is intentionally read-only. Staff must choose an explicit door action.
+        return Ok(await repository.LookupTicket(storeId, item, request.Code));
+    }
+
+    [HttpPost("{eventId}/scanner/action")]
+    [ValidateAntiForgeryToken]
+    [TicketNoStore]
+    public async Task<IActionResult> ScannerAction(string storeId, string eventId, [FromBody] ScannerActionRequest? request)
+    {
+        PrepareScannerResponse();
+        var item = await repository.GetEvent(storeId, eventId);
+        if (item is null) return NotFound();
+        var scannerSession = Request.Cookies[TicketCodeService.ScannerSessionCookieName];
+        if (!TicketCodeService.CanAccessScanner(item, scannerSession))
+            return Unauthorized(ScannerUnauthorized());
+        SetScannerSessionCookie(storeId, item.Slug, scannerSession!);
+        if (request is null || string.IsNullOrWhiteSpace(request.Code))
+            return BadRequest(ScannerMissing());
+        if (request.Code.Length > 512 || request.Gate?.Length > 80 || request.Action?.Length > 30 ||
+            request.OperationId?.Length > 100)
+            return BadRequest(ScannerInvalid());
+
+        var result = await repository.ApplyScannerAction(storeId, item, request, "Event staff scanner");
+        return result.Success || result.Status == "id_rejected" ? Ok(result) : Conflict(result);
     }
 
     [HttpPost("{eventId}/scanner/check-in")]
@@ -106,16 +151,49 @@ public abstract class EventTicketsPublicControllerBase(
         if (item is null) return NotFound();
         var scannerSession = Request.Cookies[TicketCodeService.ScannerSessionCookieName];
         if (!TicketCodeService.CanAccessScanner(item, scannerSession))
-            return Unauthorized(new CheckInResult(false, "unauthorized", null, null, null, null, "Scanner access expired. Reopen the event scanner link."));
+            return Unauthorized(ScannerUnauthorized());
         SetScannerSessionCookie(storeId, item.Slug, scannerSession!);
         if (request is null || string.IsNullOrWhiteSpace(request.Code))
-            return BadRequest(new CheckInResult(false, "missing", null, null, null, null, "Scan or enter a ticket code."));
-        if (request.Code.Length > 512 || request.Gate?.Length > 80)
-            return BadRequest(new CheckInResult(false, "invalid", null, null, null, null, "The scanner input is too long."));
+            return BadRequest(ScannerMissing());
+        if (request.Code.Length > 512 || request.Gate?.Length > 80 || request.OperationId?.Length > 100)
+            return BadRequest(ScannerInvalid());
 
-        var result = await repository.CheckIn(storeId, item, request.Code, "Event staff scanner", request.Gate);
+        var result = await repository.CheckIn(storeId, item, request.Code, "Event staff scanner", request.Gate,
+            request.IdCheckConfirmed, request.OperationId);
+        return result.Success || result.Status == "id_rejected" ? Ok(result) : Conflict(result);
+    }
+
+    [HttpPost("{eventId}/scanner/check-out")]
+    [ValidateAntiForgeryToken]
+    [TicketNoStore]
+    public async Task<IActionResult> ScannerCheckOut(string storeId, string eventId, [FromBody] ScannerCheckOutRequest? request)
+    {
+        PrepareScannerResponse();
+        var item = await repository.GetEvent(storeId, eventId);
+        if (item is null) return NotFound();
+        var scannerSession = Request.Cookies[TicketCodeService.ScannerSessionCookieName];
+        if (!TicketCodeService.CanAccessScanner(item, scannerSession))
+            return Unauthorized(ScannerUnauthorized());
+        SetScannerSessionCookie(storeId, item.Slug, scannerSession!);
+        if (request is null || string.IsNullOrWhiteSpace(request.Code))
+            return BadRequest(ScannerMissing());
+        if (request.Code.Length > 512 || request.Gate?.Length > 80 || request.OperationId?.Length > 100)
+            return BadRequest(ScannerInvalid());
+
+        var result = await repository.CheckOut(storeId, item, request.Code, "Event staff scanner", request.Gate,
+            request.OperationId);
         return result.Success ? Ok(result) : Conflict(result);
     }
+
+    private static CheckInResult ScannerUnauthorized() =>
+        new(false, "unauthorized", null, null, null, null,
+            "Scanner access expired. Reopen the event scanner link.");
+
+    private static CheckInResult ScannerMissing() =>
+        new(false, "missing", null, null, null, null, "Scan or enter a ticket code.");
+
+    private static CheckInResult ScannerInvalid() =>
+        new(false, "invalid", null, null, null, null, "The scanner input is too long or invalid.");
 
     private async Task<IActionResult> ShowEvent(string storeId, string eventId, bool posMode)
     {
