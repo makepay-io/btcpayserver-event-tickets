@@ -1,5 +1,5 @@
 @model TicketOrderViewModel
-@{ Layout = null; var analyticsEcommerce = TicketAnalytics.ForOrder(Model.Order, Model.Event, Model.Lines, purchase: true); var analyticsOrderId = TicketAnalytics.AnalyticsTransactionId(Model.Order); var analyticsContext = new EventTicketAnalyticsContext { Settings = Model.Settings, StoreId = Model.Order.StoreId, PageType = Model.Order.Status == TicketOrderStatus.Paid ? "purchase_confirmation" : Model.Order.Status == TicketOrderStatus.Pending ? "order_pending" : "order_cancelled", EventId = Model.Event.Id, EventSlug = Model.Event.Slug }; }
+@{ Layout = null; var routeStoreId = Model.CleanUrls ? null : Model.Order.StoreId; var statusUrl = Url.Action("OrderStatus", values: new { storeId = routeStoreId, orderId = Model.Order.Id, accessToken = Model.AccessToken }); var eventOnSale = TicketEventSalePolicy.CanStartCheckout(Model.Event, DateTimeOffset.UtcNow); var analyticsEcommerce = TicketAnalytics.ForOrder(Model.Order, Model.Event, Model.Lines, purchase: true); var analyticsOrderId = TicketAnalytics.AnalyticsTransactionId(Model.Order); var analyticsContext = new EventTicketAnalyticsContext { Settings = Model.Settings, StoreId = Model.Order.StoreId, PageType = Model.Order.Status == TicketOrderStatus.Paid ? "purchase_confirmation" : Model.Order.Status == TicketOrderStatus.Pending ? "order_pending" : "order_cancelled", EventId = Model.Event.Id, EventSlug = Model.Event.Slug }; }
 <!doctype html>
 <html lang="en">
 <head>
@@ -12,18 +12,32 @@
 <partial name="~/Views/EventTickets/Public/_Analytics.cshtml" model="analyticsContext" />
 @if (Model.Order.Status == TicketOrderStatus.Pending)
 {
-    <main class="et-pending"><div class="et-spinner"></div><h1>Waiting for payment confirmation</h1><p class="et-section-copy">BTCPay is still processing this order. You can return to the embedded payment or leave this page open.</p>@if(Model.Order.InvoiceId is not null){<a class="et-primary" asp-action="Payment" asp-route-storeId="@(Model.CleanUrls ? null : Model.Order.StoreId)" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">Return to payment</a>}</main>
+    <main class="et-pending">
+        <div class="et-spinner" aria-hidden="true"></div>
+        <p class="et-eyebrow">Payment processing</p>
+        <h1>Waiting for confirmation</h1>
+        <p class="et-section-copy" data-order-status role="status" aria-live="polite">Your reservation remains protected while BTCPay detects the payment and waits for the required confirmations. This page updates automatically.</p>
+        <div class="et-restart-actions">
+            @if(Model.Order.InvoiceId is not null){<a class="et-primary" asp-action="Payment" asp-route-storeId="@routeStoreId" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">Return to payment</a>}
+            <a class="et-secondary" asp-action="Storefront" asp-route-storeId="@routeStoreId">Browse events</a>
+        </div>
+    </main>
 }
 else if (Model.Order.Status == TicketOrderStatus.Cancelled)
 {
     <main class="et-pending">
+        <p class="et-eyebrow">Order ended</p>
         <h1>This order was cancelled</h1>
-        <p class="et-section-copy">No ticket was issued. Rebuy reserves the same selection in a fresh session.</p>
+        <p class="et-section-copy">@(eventOnSale ? "No ticket was issued. Rebuy reserves the same selection in a fresh session." : "No ticket was issued, and this event is no longer on sale. Browse the current events to continue.")</p>
         <div class="et-restart-actions">
-            <form method="post" asp-action="Rebuy" asp-route-storeId="@(Model.CleanUrls ? null : Model.Order.StoreId)" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
-                <button class="et-primary" type="submit" data-loading-title="Reserving your tickets…" data-loading-message="We are creating a fresh reservation with your previous selection.">Rebuy tickets</button>
-            </form>
-            <a class="et-secondary" asp-action="Event" asp-route-storeId="@(Model.CleanUrls ? null : Model.Order.StoreId)" asp-route-eventId="@Model.Event.Slug">Choose different tickets</a>
+            @if (eventOnSale)
+            {
+                <form method="post" asp-action="Rebuy" asp-route-storeId="@routeStoreId" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
+                    <button class="et-primary" type="submit" data-loading-title="Reserving your tickets…" data-loading-message="We are creating a fresh reservation with your previous selection.">Rebuy tickets</button>
+                </form>
+                <a class="et-secondary" asp-action="Event" asp-route-storeId="@routeStoreId" asp-route-eventId="@Model.Event.Slug">Choose different tickets</a>
+            }
+            <a class="et-secondary" asp-action="Storefront" asp-route-storeId="@routeStoreId">Browse events</a>
         </div>
     </main>
 }
@@ -31,16 +45,26 @@ else
 {
     <main class="et-success">
         <div class="et-success-mark" aria-hidden="true"><img src="~/imlegacy/checkmark.svg" alt=""></div>
-        <p class="et-eyebrow">Payment confirmed</p>
+        <p class="et-eyebrow">Payment confirmed · Tickets ready</p>
         <h1>@Model.Settings.ConfirmationTitle</h1>
-        <p class="et-success-lead">@Model.Settings.ConfirmationMessage A confirmation was sent to <strong>@Model.Order.BuyerEmail</strong>.</p>
+        @if (Model.Order.DeliverySent)
+        {
+            <p class="et-success-lead" role="status">@Model.Settings.ConfirmationMessage A confirmation was sent to <strong>@Model.Order.BuyerEmail</strong>.</p>
+        }
+        else
+        {
+            <p class="et-success-lead" role="status">@Model.Settings.ConfirmationMessage Your tickets are available below. Email delivery has not been confirmed yet, so keep this page handy.</p>
+        }
         <div class="et-summary">
             <div class="et-summary-row"><span>Event</span><strong>@Model.Event.Name</strong></div>
             <div class="et-summary-row"><span>Date</span><strong>@Model.Event.StartsAt.ToString("ddd, dd MMM yyyy · HH:mm")</strong></div>
             <div class="et-summary-row"><span>Venue</span><strong>@Model.Event.VenueName</strong></div>
             <div class="et-summary-row total"><span>@Model.Order.Quantity ticket@(Model.Order.Quantity == 1 ? "" : "s")</span><strong>@Model.Order.Total.ToString("0.##") @Model.Order.Currency</strong></div>
         </div>
-        @if (Model.PdfUrl is not null) { <div class="et-actions"><a class="et-primary" href="@Model.PdfUrl">Download all tickets as PDF</a></div> }
+        <div class="et-actions">
+            @if (Model.PdfUrl is not null) { <a class="et-primary" href="@Model.PdfUrl">Download all tickets as PDF</a> }
+            <a class="@(Model.PdfUrl is null ? "et-primary" : "et-secondary")" asp-action="Storefront" asp-route-storeId="@routeStoreId">Browse events</a>
+        </div>
         <section aria-label="Tickets">
             @foreach (var display in Model.Tickets)
             {
@@ -59,10 +83,46 @@ else
                 </article>
             }
         </section>
-        <partial name="~/Views/EventTickets/Public/_Footer.cshtml" model="Model.Settings" />
     </main>
     <script>
     (()=>{const analytics=window.makePayAnalytics,ecommerce=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(analyticsEcommerce)),analyticsOrderId=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(analyticsOrderId)),consentGrantedEvent=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(TicketAnalytics.ConsentGrantedEvent)),sendPurchase=()=>analytics?.purchaseOnce(analyticsOrderId,{ecommerce});sendPurchase();addEventListener(consentGrantedEvent,sendPurchase,{once:true});try{localStorage.removeItem(@Html.Raw(System.Text.Json.JsonSerializer.Serialize($"makepay:event-tickets:checkout:v1:{Model.Order.StoreId}:{Model.Event.Id}")))}catch{}})();
+    </script>
+}
+<partial name="~/Views/EventTickets/Public/_Footer.cshtml" model="Model.Settings" />
+@if (Model.Order.Status == TicketOrderStatus.Pending)
+{
+    <script>
+    (()=>{
+        const statusUrl=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(statusUrl)),status=document.querySelector('[data-order-status]');
+        let stopped=false,timer;
+        const poll=async()=>{
+            if(stopped)return;
+            clearTimeout(timer);
+            try{
+                const response=await fetch(statusUrl,{headers:{accept:'application/json'},cache:'no-store'});
+                if(!response.ok)throw new Error('status');
+                const result=await response.json();
+                if(result.status==='paid'){
+                    stopped=true;
+                    if(status)status.textContent='Payment confirmed. Preparing your tickets…';
+                    if(result.redirectUrl)window.location.replace(result.redirectUrl);else window.location.reload();
+                    return;
+                }
+                if(result.status==='cancelled'){
+                    stopped=true;
+                    if(status)status.textContent=result.message||'This order was cancelled.';
+                    setTimeout(()=>window.location.reload(),700);
+                    return;
+                }
+                if(status&&result.message)status.textContent=result.message;
+            }catch{
+                if(status)status.textContent='We could not refresh the payment status. We will keep trying automatically.';
+            }
+            timer=setTimeout(poll,2500);
+        };
+        addEventListener('pagehide',()=>{stopped=true;clearTimeout(timer)},{once:true});
+        poll();
+    })();
     </script>
 }
 </body>

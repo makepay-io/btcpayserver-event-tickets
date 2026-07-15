@@ -1,7 +1,170 @@
 @model EventTicketsDashboardViewModel
-@{ViewData.SetActivePage("EventTickets","Event Tickets","Event Tickets"); var storefrontUrl = Model.MappedBaseUrl is null ? Url.Action("Storefront", "EventTicketsPublic", new { storeId = Model.StoreId }) : Model.MappedBaseUrl + TicketPublicUrl.PublicPath(true, Model.StoreId);}
-<div class="sticky-header d-flex justify-content-between align-items-center"><h2 class="mb-0">Event Tickets</h2><div class="d-flex gap-2"><a class="btn btn-secondary" target="_blank" href="@storefrontUrl">View store</a><a class="btn btn-secondary" asp-action="Scanner" asp-route-storeId="@Model.StoreId">Open scanner</a><a class="btn btn-secondary" asp-action="Settings" asp-route-storeId="@Model.StoreId">Experience settings</a><a class="btn btn-primary" asp-action="Event" asp-route-storeId="@Model.StoreId">Add event</a></div></div><partial name="_StatusMessage" />
-<div class="row g-3 mb-4"><div class="col"><div class="bg-tile rounded p-3"><div class="text-muted">Events</div><div class="h3">@Model.Events.Count</div></div></div><div class="col"><div class="bg-tile rounded p-3"><div class="text-muted">Tickets sold</div><div class="h3">@Model.Tickets.Count</div></div></div><div class="col"><div class="bg-tile rounded p-3"><div class="text-muted">Checked in</div><div class="h3">@Model.Tickets.Count(t=>t.CheckedInAt is not null)</div></div></div></div>
-<h4>Events</h4><div class="table-responsive mb-5"><table class="table align-middle"><thead><tr><th>Event</th><th>Date</th><th>Venue</th><th>Sold</th><th></th></tr></thead><tbody>@if(!Model.Events.Any()){<tr><td colspan="5" class="text-muted py-4">Create your first event.</td></tr>}@foreach(var e in Model.Events){var eventUrl = Model.MappedBaseUrl is null ? Url.Action("Event", "EventTicketsPublic", new { storeId = Model.StoreId, eventId = e.Slug }) : Model.MappedBaseUrl + TicketPublicUrl.EventPath(true, Model.StoreId, e.Slug);var posUrl=eventUrl+"/pos";<tr><td><strong>@e.Name</strong><div class="small text-muted">/@e.Slug · @(e.Published?"Published":"Draft")</div></td><td>@e.StartsAt.ToBrowserDate()</td><td>@e.VenueName</td><td>@Model.Tickets.Count(t=>t.EventId==e.Id)</td><td class="text-end"><a class="btn btn-sm btn-secondary" target="_blank" href="@eventUrl">Store</a> <a class="btn btn-sm btn-secondary" target="_blank" href="@posUrl">POS</a> <a class="btn btn-sm btn-primary" asp-action="Event" asp-route-storeId="@Model.StoreId" asp-route-eventId="@e.Id">Edit</a></td></tr>}</tbody></table></div>
-<h4>Recent orders</h4><div class="table-responsive"><table class="table"><thead><tr><th>Created</th><th>Customer</th><th>Quantity</th><th>Status</th><th>Invoice</th><th>Email</th></tr></thead><tbody>@foreach(var o in Model.Orders){<tr><td>@o.CreatedAt.ToBrowserDate()</td><td>@o.BuyerName<div class="small text-muted">@o.BuyerEmail</div></td><td>@o.Quantity</td><td>@o.Status</td><td>@if(o.InvoiceId is not null){<a asp-controller="UIInvoice" asp-action="Invoice" asp-route-invoiceId="@o.InvoiceId">@o.InvoiceId</a>}</td><td>@(o.DeliverySent?"Sent":"—")</td></tr>}</tbody></table></div>
-<div class="alert alert-info">@Model.Settings.PromotionText <a href="https://makepay.io" target="_blank" rel="noopener">Enable 90+ currencies with MakePay</a>.</div>
+@{
+    ViewData.SetActivePage("EventTickets", "Event Tickets", "Event Tickets");
+    var storefrontUrl = Model.MappedBaseUrl is null
+        ? Url.Action("Storefront", "EventTicketsPublic", new { storeId = Model.StoreId })
+        : Model.MappedBaseUrl + TicketPublicUrl.PublicPath(true, Model.StoreId);
+    var now = DateTimeOffset.UtcNow;
+    var iconSpriteUrl = Url.Content("~/img/icon-sprite.svg");
+    var publishedEvents = Model.Events.Count(item => TicketEventSalePolicy.CanStartCheckout(item, now));
+    var checkedInTickets = Model.Tickets.Count(ticket => ticket.CheckedInAt is not null);
+    var eventsById = Model.Events.ToDictionary(item => item.Id, StringComparer.OrdinalIgnoreCase);
+}
+
+<style>
+    html,body{max-width:100%;overflow-x:hidden}
+    #mainContent{min-width:0}
+    .mp-admin-dashboard{--mp-border:var(--btcpay-body-border-light,#d0d5dd);--mp-surface:var(--btcpay-bg-tile,#fff);--mp-soft:var(--btcpay-body-bg-light,#f8fafc);--mp-muted:var(--btcpay-body-text-muted,#667085);--mp-text:var(--btcpay-body-text,#101828);width:100%;min-width:0;max-width:100%;color:var(--mp-text)}
+    .mp-admin-dashboard .sticky-header{gap:1rem;flex-wrap:wrap}.mp-admin-heading p{margin:.25rem 0 0;color:var(--mp-muted);font-size:.85rem}.mp-admin-actions{display:flex;gap:.5rem;flex-wrap:wrap}.mp-admin-icon{width:18px;height:18px;fill:currentColor}.mp-admin-actions .btn{display:inline-flex;align-items:center;justify-content:center;gap:.28rem;white-space:nowrap}
+    .mp-stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.8rem;margin-bottom:1.5rem}.mp-stat-card{display:flex;align-items:center;gap:.85rem;min-height:88px;border:1px solid var(--mp-border);border-radius:11px;background:var(--mp-surface);padding:1rem}.mp-stat-icon{display:grid;place-items:center;width:40px;height:40px;border-radius:9px;background:rgba(var(--btcpay-primary-rgb,81,177,62),.09);color:var(--btcpay-primary,#51b13e);flex:none}.mp-stat-icon svg{width:19px;height:19px;fill:currentColor}.mp-stat-copy{min-width:0}.mp-stat-copy span{display:block;color:var(--mp-muted);font-size:.74rem}.mp-stat-copy strong{display:block;font-size:1.3rem;line-height:1.15}
+    .mp-panel{min-width:0;max-width:100%;border:1px solid var(--mp-border);border-radius:12px;background:var(--mp-surface);overflow:hidden;margin-bottom:1.5rem}.mp-panel .table-responsive{max-width:100%;min-width:0;overflow-x:auto}.mp-panel-head{display:flex;min-width:0;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1rem 1.1rem;border-bottom:1px solid var(--mp-border)}.mp-panel-head h3{margin:0 0 .2rem;font-size:1rem}.mp-panel-head p{margin:0;color:var(--mp-muted);font-size:.78rem}.mp-panel-tools{display:flex;min-width:0;align-items:center;gap:.55rem;flex-wrap:wrap}.mp-search{position:relative;min-width:250px}.mp-search svg{position:absolute;top:50%;left:.72rem;width:16px;height:16px;fill:currentColor;color:var(--mp-muted);transform:translateY(-50%);pointer-events:none}.mp-search input{padding-left:2.15rem}
+    .mp-admin-table{margin:0}.mp-admin-table>thead>tr>th{padding:.72rem 1rem;border-bottom:1px solid var(--mp-border);background:var(--mp-soft);color:var(--mp-muted);font-size:.68rem;letter-spacing:.055em;text-transform:uppercase;white-space:nowrap}.mp-admin-table>tbody>tr>td{padding:.8rem 1rem;vertical-align:middle}.mp-admin-table>tbody>tr:last-child>td{border-bottom:0}.mp-event-cell{display:flex;align-items:center;gap:.75rem;min-width:255px}.mp-event-thumb{display:grid;place-items:center;width:64px;height:48px;border:1px solid var(--mp-border);border-radius:8px;background:var(--mp-soft);overflow:hidden;color:var(--btcpay-primary,#51b13e);flex:none}.mp-event-thumb img{width:100%;height:100%;object-fit:cover}.mp-event-thumb svg{width:21px;height:21px;fill:currentColor}.mp-event-info{min-width:0}.mp-event-info strong{display:block;max-width:310px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.84rem}.mp-event-info span{display:block;color:var(--mp-muted);font-size:.7rem}.mp-event-venue{display:block;max-width:230px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mp-row-actions{display:flex;justify-content:flex-end;gap:.35rem;white-space:nowrap}
+    .mp-badge{display:inline-flex;align-items:center;gap:.3rem;border-radius:999px;padding:.27rem .55rem;font-size:.68rem;font-weight:750;white-space:nowrap}.mp-badge.is-live,.mp-badge.is-paid,.mp-badge.is-ready{background:rgba(var(--btcpay-success-rgb,18,183,106),.12);color:var(--btcpay-success,#067647)}.mp-badge.is-draft,.mp-badge.is-pending{background:var(--mp-soft);color:var(--mp-muted)}.mp-badge.is-warning{background:rgba(var(--btcpay-warning-rgb,247,144,9),.13);color:var(--btcpay-warning-text,#b54708)}.mp-badge.is-revoked{background:rgba(var(--btcpay-danger-rgb,240,68,56),.11);color:var(--btcpay-danger,#b42318)}
+    .mp-table-empty{padding:3.2rem 1rem!important;text-align:center}.mp-table-empty svg{width:34px;height:34px;fill:currentColor;color:var(--mp-muted);margin-bottom:.7rem}.mp-table-empty strong{display:block;margin-bottom:.2rem}.mp-table-empty span{display:block;color:var(--mp-muted);font-size:.8rem;margin-bottom:.9rem}.mp-filter-empty{display:none;padding:2rem;text-align:center;color:var(--mp-muted);font-size:.82rem}.mp-filter-empty.is-visible{display:block}.mp-order-id{font-size:.73rem}.mp-order-customer{display:block;max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mp-attribution{display:flex;align-items:flex-start;gap:.7rem;border:1px solid rgba(var(--btcpay-primary-rgb,81,177,62),.2);border-radius:10px;background:rgba(var(--btcpay-primary-rgb,81,177,62),.055);padding:.85rem 1rem;color:var(--mp-muted);font-size:.78rem;line-height:1.45}.mp-attribution svg{width:18px;height:18px;fill:currentColor;color:var(--btcpay-primary,#51b13e);flex:none;margin-top:.1rem}
+    @@media(max-width:991.98px){.mp-stat-grid{grid-template-columns:1fr 1fr}.mp-panel-head{align-items:stretch;flex-direction:column}.mp-panel-tools{width:100%}.mp-search{flex:1;min-width:180px}}
+    @@media(max-width:575.98px){.mp-stat-grid{grid-template-columns:1fr}.mp-admin-actions{width:100%}.mp-admin-actions .btn-primary{flex:1}.mp-panel-tools{align-items:stretch;flex-direction:column}.mp-search{width:100%}.mp-row-actions{justify-content:flex-start}.mp-event-cell{min-width:220px}}
+</style>
+
+<div class="mp-admin-dashboard">
+    <div class="sticky-header d-flex justify-content-between align-items-center">
+        <div class="mp-admin-heading">
+            <h2 class="mb-0">Event tickets</h2>
+            <p>Create ticketed experiences, monitor sales, check in guests, and deliver passes through BTCPay.</p>
+        </div>
+        <div class="mp-admin-actions">
+            <a class="btn btn-secondary" target="_blank" rel="noopener noreferrer" href="@storefrontUrl"><svg class="mp-admin-icon" aria-hidden="true"><use href="@($"{iconSpriteUrl}#actions-show")"></use></svg>View store</a>
+            <a class="btn btn-secondary" asp-action="Scanner" asp-route-storeId="@Model.StoreId"><svg class="mp-admin-icon" aria-hidden="true"><use href="@($"{iconSpriteUrl}#qr-code")"></use></svg>Open scanner</a>
+            <a class="btn btn-secondary" asp-action="Settings" asp-route-storeId="@Model.StoreId"><svg class="mp-admin-icon" aria-hidden="true"><use href="@($"{iconSpriteUrl}#settings")"></use></svg>Store settings</a>
+            <a class="btn btn-primary" asp-action="Event" asp-route-storeId="@Model.StoreId"><svg class="mp-admin-icon" aria-hidden="true"><use href="@($"{iconSpriteUrl}#actions-add")"></use></svg>Add event</a>
+        </div>
+    </div>
+
+    <partial name="_StatusMessage" />
+
+    <div class="mp-stat-grid" aria-label="Event ticket summary">
+        <div class="mp-stat-card"><span class="mp-stat-icon"><svg aria-hidden="true"><use href="@($"{iconSpriteUrl}#calendar")"></use></svg></span><div class="mp-stat-copy"><span>All events</span><strong>@Model.Events.Count</strong></div></div>
+        <div class="mp-stat-card"><span class="mp-stat-icon"><svg aria-hidden="true"><use href="@($"{iconSpriteUrl}#actions-show")"></use></svg></span><div class="mp-stat-copy"><span>On sale</span><strong>@publishedEvents</strong></div></div>
+        <div class="mp-stat-card"><span class="mp-stat-icon"><svg aria-hidden="true"><use href="@($"{iconSpriteUrl}#checkout-complete")"></use></svg></span><div class="mp-stat-copy"><span>Tickets sold</span><strong>@Model.Tickets.Count</strong></div></div>
+        <div class="mp-stat-card"><span class="mp-stat-icon"><svg aria-hidden="true"><use href="@($"{iconSpriteUrl}#checkmark")"></use></svg></span><div class="mp-stat-copy"><span>Checked in</span><strong>@checkedInTickets</strong></div></div>
+    </div>
+
+    <section class="mp-panel" aria-labelledby="events-heading">
+        <div class="mp-panel-head">
+            <div><h3 id="events-heading">Events</h3><p>Manage storefront visibility, schedules, ticket inventory, point-of-sale access, and event details.</p></div>
+            @if (Model.Events.Any())
+            {
+                <div class="mp-panel-tools">
+                    <label class="mp-search"><span class="visually-hidden">Search events</span><svg aria-hidden="true"><use href="@($"{iconSpriteUrl}#actions-search")"></use></svg><input class="form-control form-control-sm" type="search" placeholder="Search events" data-event-search /></label>
+                    <label><span class="visually-hidden">Filter by event status</span><select class="form-select form-select-sm" data-event-status-filter><option value="">All statuses</option><option value="published">On sale</option><option value="draft">Draft</option><option value="ended">Ended</option></select></label>
+                </div>
+            }
+        </div>
+        <div class="table-responsive">
+            <table class="table mp-admin-table align-middle">
+                <thead><tr><th>Event</th><th>Schedule</th><th>Venue</th><th>Ticket types</th><th>Sold</th><th>Status</th><th aria-label="Actions"></th></tr></thead>
+                <tbody data-event-rows>
+                    @if (!Model.Events.Any())
+                    {
+                        <tr><td colspan="7" class="mp-table-empty"><svg aria-hidden="true"><use href="@($"{iconSpriteUrl}#calendar")"></use></svg><strong>Create your first event</strong><span>Add ticket types, capacity, venue details, and a public event page.</span><a class="btn btn-primary" asp-action="Event" asp-route-storeId="@Model.StoreId">Add event</a></td></tr>
+                    }
+                    @foreach (var item in Model.Events)
+                    {
+                        var eventUrl = Model.MappedBaseUrl is null
+                            ? Url.Action("Event", "EventTicketsPublic", new { storeId = Model.StoreId, eventId = item.Slug })
+                            : Model.MappedBaseUrl + TicketPublicUrl.EventPath(true, Model.StoreId, item.Slug);
+                        var posUrl = eventUrl + "/pos";
+                        var sold = Model.Tickets.Count(ticket => ticket.EventId == item.Id);
+                        var saleable = TicketEventSalePolicy.CanStartCheckout(item, now);
+                        var statusKey = item.EndsAt <= now ? "ended" : item.Published ? "published" : "draft";
+                        var statusClass = statusKey == "ended" ? "is-warning" : statusKey == "published" ? "is-live" : "is-draft";
+                        var statusLabel = statusKey == "ended" ? "Ended" : statusKey == "published" ? "On sale" : "Draft";
+                        var searchable = $"{item.Name} {item.Slug} {item.VenueName} {item.VenueAddress}".ToLowerInvariant();
+                        <tr data-event-row data-search="@searchable" data-status="@statusKey">
+                            <td>
+                                <div class="mp-event-cell">
+                                    <span class="mp-event-thumb">
+                                        @if (!string.IsNullOrWhiteSpace(item.BannerUrl))
+                                        {
+                                            <img src="@item.BannerUrl" alt="" loading="lazy" />
+                                        }
+                                        else
+                                        {
+                                            <svg aria-hidden="true"><use href="@($"{iconSpriteUrl}#calendar")"></use></svg>
+                                        }
+                                    </span>
+                                    <span class="mp-event-info"><strong>@item.Name</strong><span>/@item.Slug</span></span>
+                                </div>
+                            </td>
+                            <td class="text-nowrap"><span class="small">@item.StartsAt.ToBrowserDate()</span><div class="small text-muted">to @item.EndsAt.ToBrowserDate()</div></td>
+                            <td><strong class="small mp-event-venue" title="@item.VenueName">@item.VenueName</strong>@if (!string.IsNullOrWhiteSpace(item.VenueAddress)) { <div class="small text-muted mp-event-venue" title="@item.VenueAddress">@item.VenueAddress</div> }</td>
+                            <td><span class="small">@item.TicketTypes.Count(type => type.Active) active</span><div class="small text-muted">@item.TicketTypes.Count total</div></td>
+                            <td><strong>@sold</strong></td>
+                            <td><span class="mp-badge @statusClass">@statusLabel</span></td>
+                            <td><div class="mp-row-actions">@if (saleable) { <a class="btn btn-sm btn-secondary" target="_blank" rel="noopener noreferrer" href="@eventUrl">View</a><a class="btn btn-sm btn-secondary" target="_blank" rel="noopener noreferrer" href="@posUrl">POS</a> } else { <a class="btn btn-sm btn-secondary" target="_blank" rel="noopener noreferrer" href="@storefrontUrl">Store</a> }<a class="btn btn-sm btn-secondary" asp-action="Event" asp-route-storeId="@Model.StoreId" asp-route-eventId="@item.Id">Edit</a></div></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="mp-filter-empty" data-event-filter-empty>No events match those filters.</div>
+    </section>
+
+    <section class="mp-panel" aria-labelledby="orders-heading">
+        <div class="mp-panel-head"><div><h3 id="orders-heading">Recent orders</h3><p>The latest 100 reservations, payment states, invoice links, and ticket-delivery activity.</p></div></div>
+        <div class="table-responsive">
+            <table class="table mp-admin-table align-middle">
+                <thead><tr><th>Created</th><th>Order / invoice</th><th>Event</th><th>Customer</th><th>Quantity</th><th>Status</th><th>Email</th></tr></thead>
+                <tbody>
+                    @if (!Model.Orders.Any())
+                    {
+                        <tr><td colspan="7" class="mp-table-empty"><svg aria-hidden="true"><use href="@($"{iconSpriteUrl}#nav-invoices")"></use></svg><strong>No orders yet</strong><span>Reservations, BTCPay invoices, and delivery status will appear here.</span></td></tr>
+                    }
+                    @foreach (var order in Model.Orders)
+                    {
+                        eventsById.TryGetValue(order.EventId, out var orderEvent);
+                        var shortId = order.Id[..Math.Min(8, order.Id.Length)];
+                        var statusClass = order.Status switch
+                        {
+                            TicketOrderStatus.Paid => "is-paid",
+                            TicketOrderStatus.Pending => "is-pending",
+                            _ => "is-revoked"
+                        };
+                        <tr>
+                            <td class="text-nowrap small">@order.CreatedAt.ToBrowserDate()</td>
+                            <td><code class="mp-order-id">@shortId</code>@if (order.InvoiceId is not null) { <div><a class="small" asp-controller="UIInvoice" asp-action="Invoice" asp-route-invoiceId="@order.InvoiceId">Open invoice</a></div> }</td>
+                            <td><strong class="small">@(orderEvent?.Name ?? "Deleted event")</strong></td>
+                            <td>@if (!string.IsNullOrWhiteSpace(order.BuyerName)) { <strong class="small mp-order-customer" title="@order.BuyerName">@order.BuyerName</strong> }<span class="small text-muted mp-order-customer" title="@order.BuyerEmail">@order.BuyerEmail</span></td>
+                            <td><strong>@order.Quantity</strong></td>
+                            <td><span class="mp-badge @statusClass">@order.Status</span></td>
+                            <td><span class="mp-badge @(order.DeliverySent ? "is-ready" : "is-pending")">@(order.DeliverySent ? "Sent" : "Not sent")</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <div class="mp-attribution"><svg aria-hidden="true"><use href="@($"{iconSpriteUrl}#info")"></use></svg><div><strong>Created by MakePay.io.</strong> Accept 90+ currencies in a decentralized way with BTCPay Server. <a href="https://makepay.io" target="_blank" rel="noopener noreferrer">Explore MakePay</a>.</div></div>
+</div>
+
+<script>
+(() => {
+    const search = document.querySelector('[data-event-search]');
+    const status = document.querySelector('[data-event-status-filter]');
+    const rows = [...document.querySelectorAll('[data-event-row]')];
+    const empty = document.querySelector('[data-event-filter-empty]');
+    const filterEvents = () => {
+        const query = search?.value.trim().toLowerCase() || '';
+        const selectedStatus = status?.value || '';
+        let visible = 0;
+        rows.forEach(row => {
+            const matches = (!query || row.dataset.search.includes(query)) && (!selectedStatus || row.dataset.status === selectedStatus);
+            row.hidden = !matches;
+            if (matches) visible++;
+        });
+        empty?.classList.toggle('is-visible', rows.length > 0 && visible === 0);
+    };
+    search?.addEventListener('input', filterEvents);
+    status?.addEventListener('change', filterEvents);
+})();
+</script>

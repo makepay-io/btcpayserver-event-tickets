@@ -1,5 +1,22 @@
 @model TicketCheckoutPageViewModel
-@{ Layout = null; var attendeeIndex = 0; var analyticsEcommerce = TicketAnalytics.ForOrder(Model.Order, Model.Event, Model.Lines); var analyticsOrderId = TicketAnalytics.AnalyticsTransactionId(Model.Order); var analyticsContext = new EventTicketAnalyticsContext { Settings = Model.Settings, StoreId = Model.StoreId, PageType = "checkout_details", EventId = Model.Event.Id, EventSlug = Model.Event.Slug }; }
+@{
+    Layout = null;
+    var attendeeIndex = 0;
+    string? FieldError(string key) => ViewData.ModelState.TryGetValue(key, out var state)
+        ? state.Errors.FirstOrDefault()?.ErrorMessage
+        : null;
+    var buyerFirstError = FieldError(nameof(TicketCheckoutInput.BuyerFirstName));
+    var buyerLastError = FieldError(nameof(TicketCheckoutInput.BuyerLastName));
+    var buyerEmailError = FieldError(nameof(TicketCheckoutInput.BuyerEmail));
+    var buyerPhoneError = FieldError(nameof(TicketCheckoutInput.BuyerPhone));
+    var buyerCountryError = FieldError(nameof(TicketCheckoutInput.BuyerCountry));
+    var buyerCompanyError = FieldError(nameof(TicketCheckoutInput.BuyerCompany));
+    var termsError = FieldError(nameof(TicketCheckoutInput.AcceptTerms));
+    var eventOnSale = TicketEventSalePolicy.CanStartCheckout(Model.Event, DateTimeOffset.UtcNow);
+    var analyticsEcommerce = TicketAnalytics.ForOrder(Model.Order, Model.Event, Model.Lines);
+    var analyticsOrderId = TicketAnalytics.AnalyticsTransactionId(Model.Order);
+    var analyticsContext = new EventTicketAnalyticsContext { Settings = Model.Settings, StoreId = Model.StoreId, PageType = "checkout_details", EventId = Model.Event.Id, EventSlug = Model.Event.Slug };
+}
 <!doctype html>
 <html lang="en">
 <head>
@@ -13,34 +30,71 @@
 <partial name="~/Views/EventTickets/Public/_Countdown.cshtml" model="Model" />
 <main class="et-checkout-shell">
     <partial name="~/Views/EventTickets/Public/_Stepper.cshtml" model="Model.Step" />
-    @if (Model.Order.Status == TicketOrderStatus.Cancelled || Model.Order.ReservationExpiresAt <= DateTimeOffset.UtcNow)
+    @if (Model.Order.Status == TicketOrderStatus.Cancelled || TicketReservationPolicy.CanExpire(Model.Order, DateTimeOffset.UtcNow))
     {
         <section class="et-pending">
             <h1>This reservation has ended</h1>
-            <p class="et-section-copy">Your tickets were released before checkout was completed. Rebuy reserves the same selection again and restores the details saved in this browser.</p>
+            <p class="et-section-copy">@(eventOnSale ? "Your tickets were released before checkout was completed. Rebuy reserves the same selection again and restores the details saved in this browser." : "Your tickets were released, and this event is no longer on sale. Your saved attendee details remain in this browser for another purchase.")</p>
             <div class="et-restart-actions">
-                <form method="post" asp-action="Rebuy" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
-                    <button class="et-primary" type="submit" data-loading-title="Reserving your tickets…" data-loading-message="We are creating a fresh reservation with your previous selection.">Rebuy tickets</button>
-                </form>
-                <a class="et-secondary" asp-action="Event" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug">Choose different tickets</a>
+                @if (eventOnSale)
+                {
+                    <form method="post" asp-action="Rebuy" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
+                        <button class="et-primary" type="submit" data-loading-title="Reserving your tickets…" data-loading-message="We are creating a fresh reservation with your previous selection.">Rebuy tickets</button>
+                    </form>
+                    <a class="et-secondary" asp-action="Event" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug">Choose different tickets</a>
+                }
+                <a class="et-secondary" asp-action="Storefront" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)">Browse events</a>
             </div>
         </section>
     }
     else
     {
-        <form method="post" data-et-checkout-form asp-action="CreatePayment" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
-            <div asp-validation-summary="All" class="et-alert"></div>
+        <form method="post" data-et-checkout-form asp-action="CreatePayment" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken" data-loading-title="Preparing secure payment…" data-loading-message="We are validating attendee details and creating your BTCPay invoice.">
+            <div asp-validation-summary="All" class="et-alert" role="alert" aria-live="assertive"></div>
             <section>
                 <h1 class="et-section-heading">Billing details</h1>
                 <p class="et-section-copy">We use this information for your payment receipt and ticket delivery.</p>
-                <p class="et-help">Saved only in this browser for up to 30 days so an expired reservation is easier to restart. Payment details, passwords, and consent are never stored.</p>
+                <div class="et-saved-details">
+                    <p class="et-help">Saved only in this browser for up to 30 days so an expired reservation is easier to restart. Payment details, passwords, and consent are never stored.</p>
+                    <div class="et-saved-details-actions">
+                        <span class="et-storage-status" data-et-storage-status role="status" aria-live="polite"></span>
+                        <button class="et-text-action" type="button" data-et-clear-saved>Clear saved details</button>
+                    </div>
+                </div>
                 <div class="et-form-card et-grid-2">
-                    <div class="et-field"><label for="buyer-first">First name <span class="et-required">*</span></label><input class="et-input" id="buyer-first" name="BuyerFirstName" value="@Model.Input.BuyerFirstName" autocomplete="given-name" required></div>
-                    <div class="et-field"><label for="buyer-last">Last name <span class="et-required">*</span></label><input class="et-input" id="buyer-last" name="BuyerLastName" value="@Model.Input.BuyerLastName" autocomplete="family-name" required></div>
-                    <div class="et-field"><label for="buyer-email">Email <span class="et-required">*</span></label><input class="et-input" id="buyer-email" name="BuyerEmail" value="@Model.Input.BuyerEmail" type="email" autocomplete="email" required></div>
-                    <div class="et-field"><label for="buyer-phone">Phone number @if(Model.Settings.RequirePhone){<span class="et-required">*</span>}</label><input class="et-input" id="buyer-phone" name="BuyerPhone" value="@Model.Input.BuyerPhone" type="tel" autocomplete="tel" required="@(Model.Settings.RequirePhone ? "required" : null)"></div>
-                    <div class="et-field"><label for="buyer-country">Country @if(Model.Settings.RequireCountry){<span class="et-required">*</span>}</label><input class="et-input" id="buyer-country" name="BuyerCountry" value="@Model.Input.BuyerCountry" autocomplete="country-name" required="@(Model.Settings.RequireCountry ? "required" : null)"></div>
-                    @if (Model.Settings.CollectCompany) { <div class="et-field"><label for="buyer-company">Company</label><input class="et-input" id="buyer-company" name="BuyerCompany" value="@Model.Input.BuyerCompany" autocomplete="organization"></div> }
+                    <div class="et-field">
+                        <label for="buyer-first">First name <span class="et-required">*</span></label>
+                        <input class="et-input" id="buyer-first" name="BuyerFirstName" value="@Model.Input.BuyerFirstName" maxlength="100" autocomplete="given-name" required aria-invalid="@(buyerFirstError is null ? null : "true")" aria-describedby="@(buyerFirstError is null ? null : "buyer-first-error")">
+                        @if (buyerFirstError is not null) { <span class="et-validation" id="buyer-first-error">@buyerFirstError</span> }
+                    </div>
+                    <div class="et-field">
+                        <label for="buyer-last">Last name <span class="et-required">*</span></label>
+                        <input class="et-input" id="buyer-last" name="BuyerLastName" value="@Model.Input.BuyerLastName" maxlength="100" autocomplete="family-name" required aria-invalid="@(buyerLastError is null ? null : "true")" aria-describedby="@(buyerLastError is null ? null : "buyer-last-error")">
+                        @if (buyerLastError is not null) { <span class="et-validation" id="buyer-last-error">@buyerLastError</span> }
+                    </div>
+                    <div class="et-field">
+                        <label for="buyer-email">Email <span class="et-required">*</span></label>
+                        <input class="et-input" id="buyer-email" name="BuyerEmail" value="@Model.Input.BuyerEmail" type="email" maxlength="200" autocomplete="email" required aria-invalid="@(buyerEmailError is null ? null : "true")" aria-describedby="@(buyerEmailError is null ? null : "buyer-email-error")">
+                        @if (buyerEmailError is not null) { <span class="et-validation" id="buyer-email-error">@buyerEmailError</span> }
+                    </div>
+                    <div class="et-field">
+                        <label for="buyer-phone">Phone number @if(Model.Settings.RequirePhone){<span class="et-required">*</span>}</label>
+                        <input class="et-input" id="buyer-phone" name="BuyerPhone" value="@Model.Input.BuyerPhone" type="tel" maxlength="50" autocomplete="tel" required="@(Model.Settings.RequirePhone ? "required" : null)" aria-invalid="@(buyerPhoneError is null ? null : "true")" aria-describedby="@(buyerPhoneError is null ? null : "buyer-phone-error")">
+                        @if (buyerPhoneError is not null) { <span class="et-validation" id="buyer-phone-error">@buyerPhoneError</span> }
+                    </div>
+                    <div class="et-field">
+                        <label for="buyer-country">Country @if(Model.Settings.RequireCountry){<span class="et-required">*</span>}</label>
+                        <input class="et-input" id="buyer-country" name="BuyerCountry" value="@Model.Input.BuyerCountry" maxlength="100" autocomplete="country-name" required="@(Model.Settings.RequireCountry ? "required" : null)" aria-invalid="@(buyerCountryError is null ? null : "true")" aria-describedby="@(buyerCountryError is null ? null : "buyer-country-error")">
+                        @if (buyerCountryError is not null) { <span class="et-validation" id="buyer-country-error">@buyerCountryError</span> }
+                    </div>
+                    @if (Model.Settings.CollectCompany)
+                    {
+                        <div class="et-field">
+                            <label for="buyer-company">Company</label>
+                            <input class="et-input" id="buyer-company" name="BuyerCompany" value="@Model.Input.BuyerCompany" maxlength="160" autocomplete="organization" aria-invalid="@(buyerCompanyError is null ? null : "true")" aria-describedby="@(buyerCompanyError is null ? null : "buyer-company-error")">
+                            @if (buyerCompanyError is not null) { <span class="et-validation" id="buyer-company-error">@buyerCompanyError</span> }
+                        </div>
+                    }
                 </div>
             </section>
             <section>
@@ -55,18 +109,58 @@
                         @for (var localIndex = 0; localIndex < line.Line.Quantity; localIndex++)
                         {
                             var input = Model.Input.Attendees.ElementAtOrDefault(attendeeIndex) ?? new TicketAttendeeInput { TicketTypeId = line.TicketType.Id };
+                            var attendeePrefix = $"Attendees[{attendeeIndex}]";
+                            var attendeeFirstError = FieldError($"{attendeePrefix}.FirstName");
+                            var attendeeLastError = FieldError($"{attendeePrefix}.LastName");
+                            var attendeeNicknameError = FieldError($"{attendeePrefix}.Nickname");
+                            var attendeeEmailError = FieldError($"{attendeePrefix}.Email");
+                            var attendeePhoneError = FieldError($"{attendeePrefix}.Phone");
+                            var attendeeCountryError = FieldError($"{attendeePrefix}.Country");
+                            var attendeeCompanyError = FieldError($"{attendeePrefix}.Company");
                             <div class="et-attendee-card" data-attendee="@attendeeIndex">
                                 <h4>Attendee @(localIndex + 1)</h4>
                                 <p class="et-help">Ticket @(@attendeeIndex + 1) of @Model.Order.Quantity</p>
                                 <input type="hidden" name="Attendees[@attendeeIndex].TicketTypeId" value="@line.TicketType.Id">
                                 <div class="et-grid-2">
-                                    <div class="et-field"><label for="attendee-@attendeeIndex-first">First name <span class="et-required">*</span></label><input class="et-input" id="attendee-@attendeeIndex-first" name="Attendees[@attendeeIndex].FirstName" value="@input.FirstName" required></div>
-                                    <div class="et-field"><label for="attendee-@attendeeIndex-last">Last name <span class="et-required">*</span></label><input class="et-input" id="attendee-@attendeeIndex-last" name="Attendees[@attendeeIndex].LastName" value="@input.LastName" required></div>
-                                    <div class="et-field"><label for="attendee-@attendeeIndex-nickname">Nickname</label><span class="et-help">Optional name shown on the ticket.</span><input class="et-input" id="attendee-@attendeeIndex-nickname" name="Attendees[@attendeeIndex].Nickname" value="@input.Nickname"></div>
-                                    <div class="et-field"><label for="attendee-@attendeeIndex-email">Email <span class="et-required">*</span></label><input class="et-input" id="attendee-@attendeeIndex-email" name="Attendees[@attendeeIndex].Email" value="@input.Email" type="email" required></div>
-                                    <div class="et-field"><label for="attendee-@attendeeIndex-phone">Phone</label><input class="et-input" id="attendee-@attendeeIndex-phone" name="Attendees[@attendeeIndex].Phone" value="@input.Phone" type="tel"></div>
-                                    <div class="et-field"><label for="attendee-@attendeeIndex-country">Country</label><input class="et-input" id="attendee-@attendeeIndex-country" name="Attendees[@attendeeIndex].Country" value="@input.Country"></div>
-                                    @if (Model.Settings.CollectCompany) { <div class="et-field"><label for="attendee-@attendeeIndex-company">Company</label><input class="et-input" id="attendee-@attendeeIndex-company" name="Attendees[@attendeeIndex].Company" value="@input.Company"></div> }
+                                    <div class="et-field">
+                                        <label for="attendee-@attendeeIndex-first">First name <span class="et-required">*</span></label>
+                                        <input class="et-input" id="attendee-@attendeeIndex-first" name="Attendees[@attendeeIndex].FirstName" value="@input.FirstName" maxlength="100" autocomplete="given-name" required aria-invalid="@(attendeeFirstError is null ? null : "true")" aria-describedby="@(attendeeFirstError is null ? null : $"attendee-{attendeeIndex}-first-error")">
+                                        @if (attendeeFirstError is not null) { <span class="et-validation" id="attendee-@attendeeIndex-first-error">@attendeeFirstError</span> }
+                                    </div>
+                                    <div class="et-field">
+                                        <label for="attendee-@attendeeIndex-last">Last name <span class="et-required">*</span></label>
+                                        <input class="et-input" id="attendee-@attendeeIndex-last" name="Attendees[@attendeeIndex].LastName" value="@input.LastName" maxlength="100" autocomplete="family-name" required aria-invalid="@(attendeeLastError is null ? null : "true")" aria-describedby="@(attendeeLastError is null ? null : $"attendee-{attendeeIndex}-last-error")">
+                                        @if (attendeeLastError is not null) { <span class="et-validation" id="attendee-@attendeeIndex-last-error">@attendeeLastError</span> }
+                                    </div>
+                                    <div class="et-field">
+                                        <label for="attendee-@attendeeIndex-nickname">Nickname</label>
+                                        <span class="et-help" id="attendee-@attendeeIndex-nickname-help">Optional name shown on the ticket.</span>
+                                        <input class="et-input" id="attendee-@attendeeIndex-nickname" name="Attendees[@attendeeIndex].Nickname" value="@input.Nickname" maxlength="100" aria-invalid="@(attendeeNicknameError is null ? null : "true")" aria-describedby="@(attendeeNicknameError is null ? $"attendee-{attendeeIndex}-nickname-help" : $"attendee-{attendeeIndex}-nickname-help attendee-{attendeeIndex}-nickname-error")">
+                                        @if (attendeeNicknameError is not null) { <span class="et-validation" id="attendee-@attendeeIndex-nickname-error">@attendeeNicknameError</span> }
+                                    </div>
+                                    <div class="et-field">
+                                        <label for="attendee-@attendeeIndex-email">Email <span class="et-required">*</span></label>
+                                        <input class="et-input" id="attendee-@attendeeIndex-email" name="Attendees[@attendeeIndex].Email" value="@input.Email" type="email" maxlength="200" autocomplete="email" required aria-invalid="@(attendeeEmailError is null ? null : "true")" aria-describedby="@(attendeeEmailError is null ? null : $"attendee-{attendeeIndex}-email-error")">
+                                        @if (attendeeEmailError is not null) { <span class="et-validation" id="attendee-@attendeeIndex-email-error">@attendeeEmailError</span> }
+                                    </div>
+                                    <div class="et-field">
+                                        <label for="attendee-@attendeeIndex-phone">Phone</label>
+                                        <input class="et-input" id="attendee-@attendeeIndex-phone" name="Attendees[@attendeeIndex].Phone" value="@input.Phone" type="tel" maxlength="50" autocomplete="tel" aria-invalid="@(attendeePhoneError is null ? null : "true")" aria-describedby="@(attendeePhoneError is null ? null : $"attendee-{attendeeIndex}-phone-error")">
+                                        @if (attendeePhoneError is not null) { <span class="et-validation" id="attendee-@attendeeIndex-phone-error">@attendeePhoneError</span> }
+                                    </div>
+                                    <div class="et-field">
+                                        <label for="attendee-@attendeeIndex-country">Country</label>
+                                        <input class="et-input" id="attendee-@attendeeIndex-country" name="Attendees[@attendeeIndex].Country" value="@input.Country" maxlength="100" autocomplete="country-name" aria-invalid="@(attendeeCountryError is null ? null : "true")" aria-describedby="@(attendeeCountryError is null ? null : $"attendee-{attendeeIndex}-country-error")">
+                                        @if (attendeeCountryError is not null) { <span class="et-validation" id="attendee-@attendeeIndex-country-error">@attendeeCountryError</span> }
+                                    </div>
+                                    @if (Model.Settings.CollectCompany)
+                                    {
+                                        <div class="et-field">
+                                            <label for="attendee-@attendeeIndex-company">Company</label>
+                                            <input class="et-input" id="attendee-@attendeeIndex-company" name="Attendees[@attendeeIndex].Company" value="@input.Company" maxlength="160" autocomplete="organization" aria-invalid="@(attendeeCompanyError is null ? null : "true")" aria-describedby="@(attendeeCompanyError is null ? null : $"attendee-{attendeeIndex}-company-error")">
+                                            @if (attendeeCompanyError is not null) { <span class="et-validation" id="attendee-@attendeeIndex-company-error">@attendeeCompanyError</span> }
+                                        </div>
+                                    }
                                 </div>
                             </div>
                             attendeeIndex++;
@@ -76,18 +170,61 @@
             </section>
             <section class="et-form-card">
                 <label class="et-check">
-                    @if (Model.Input.AcceptTerms) { <input type="checkbox" name="AcceptTerms" value="true" checked required> } else { <input type="checkbox" name="AcceptTerms" value="true" required> }
+                    @if (Model.Input.AcceptTerms) { <input type="checkbox" name="AcceptTerms" value="true" checked required aria-invalid="@(termsError is null ? null : "true")" aria-describedby="@(termsError is null ? null : "accept-terms-error")"> } else { <input type="checkbox" name="AcceptTerms" value="true" required aria-invalid="@(termsError is null ? null : "true")" aria-describedby="@(termsError is null ? null : "accept-terms-error")"> }
                     <span>I have read and agree to @if(!string.IsNullOrWhiteSpace(Model.Settings.PrivacyUrl)){<a href="@Model.Settings.PrivacyUrl" target="_blank" rel="noopener noreferrer">Privacy Policy</a>}else{<span>the privacy notice</span>} and @if(!string.IsNullOrWhiteSpace(Model.Settings.TermsUrl)){<a href="@Model.Settings.TermsUrl" target="_blank" rel="noopener noreferrer">Terms &amp; Conditions</a>}else{<span>the terms and conditions</span>}.</span>
                 </label>
+                @if (termsError is not null) { <p class="et-validation" id="accept-terms-error" role="alert">@termsError</p> }
                 <button class="et-primary et-continue" type="submit" data-et-requires-session>Proceed to payment · @Model.Order.Total.ToString("0.##") @Model.Order.Currency</button>
             </section>
             <div class="et-actions"><a class="et-secondary" asp-action="Cart" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">Back to cart</a></div>
         </form>
-        <partial name="~/Views/EventTickets/Public/_Footer.cshtml" model="Model.Settings" />
     }
+    <partial name="~/Views/EventTickets/Public/_Footer.cshtml" model="Model.Settings" />
 </main>
 <script>
-(()=>{const form=document.querySelector('[data-et-checkout-form]');if(!form)return;const storageKey=@Html.Raw(System.Text.Json.JsonSerializer.Serialize($"makepay:event-tickets:checkout:v1:{Model.StoreId}:{Model.Event.Id}")),maxAge=30*24*60*60*1000,buyer=/^Buyer(?:FirstName|LastName|Email|Phone|Country|Company)$/,attendee=/^Attendees\[\d+\]\.(?:FirstName|LastName|Nickname|Email|Phone|Country|Company)$/;const fields=()=>Array.from(form.elements).filter(field=>field instanceof HTMLInputElement&&(buyer.test(field.name)||attendee.test(field.name)));let saved=null;try{saved=JSON.parse(localStorage.getItem(storageKey)||'null');if(saved&&Date.now()-saved.updatedAt>maxAge){localStorage.removeItem(storageKey);saved=null}}catch{saved=null}if(saved?.values)fields().forEach(field=>{if(!field.value&&typeof saved.values[field.name]==='string')field.value=saved.values[field.name]});const persist=()=>{const values={};fields().forEach(field=>values[field.name]=field.value);try{localStorage.setItem(storageKey,JSON.stringify({updatedAt:Date.now(),values}))}catch{}};let timer;form.addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(persist,150)});form.addEventListener('change',persist);form.addEventListener('submit',persist);addEventListener('pagehide',persist);const toggle=document.getElementById('copy-buyer');if(!toggle)return;toggle.addEventListener('change',()=>{if(!toggle.checked)return;const pairs=[['buyer-first','attendee-0-first'],['buyer-last','attendee-0-last'],['buyer-email','attendee-0-email'],['buyer-phone','attendee-0-phone'],['buyer-country','attendee-0-country']];pairs.forEach(([source,target])=>{const from=document.getElementById(source),to=document.getElementById(target);if(from&&to)to.value=from.value});persist()})})();
+(()=>{
+    const form=document.querySelector('[data-et-checkout-form]');
+    if(!form)return;
+    const storageKey=@Html.Raw(System.Text.Json.JsonSerializer.Serialize($"makepay:event-tickets:checkout:v1:{Model.StoreId}:{Model.Event.Id}")),
+        maxAge=30*24*60*60*1000,
+        buyer=/^Buyer(?:FirstName|LastName|Email|Phone|Country|Company)$/,
+        attendee=/^Attendees\[\d+\]\.(?:FirstName|LastName|Nickname|Email|Phone|Country|Company)$/,
+        status=form.querySelector('[data-et-storage-status]'),
+        clearButton=form.querySelector('[data-et-clear-saved]'),
+        toggle=document.getElementById('copy-buyer');
+    const fields=()=>Array.from(form.elements).filter(field=>field instanceof HTMLInputElement&&(buyer.test(field.name)||attendee.test(field.name)));
+    let saved=null,persistenceEnabled=true,timer;
+    try{
+        saved=JSON.parse(localStorage.getItem(storageKey)||'null');
+        if(saved&&Date.now()-saved.updatedAt>maxAge){localStorage.removeItem(storageKey);saved=null}
+    }catch{saved=null}
+    if(saved?.values)fields().forEach(field=>{if(!field.value&&typeof saved.values[field.name]==='string')field.value=saved.values[field.name]});
+    const persist=()=>{
+        if(!persistenceEnabled)return;
+        const values={};
+        fields().forEach(field=>values[field.name]=field.value);
+        try{localStorage.setItem(storageKey,JSON.stringify({updatedAt:Date.now(),values}))}catch{}
+    };
+    form.addEventListener('input',()=>{persistenceEnabled=true;if(status)status.textContent='';clearTimeout(timer);timer=setTimeout(persist,150)});
+    form.addEventListener('change',()=>{persistenceEnabled=true;persist()});
+    form.addEventListener('submit',persist);
+    addEventListener('pagehide',persist);
+    clearButton?.addEventListener('click',()=>{
+        persistenceEnabled=false;
+        clearTimeout(timer);
+        try{localStorage.removeItem(storageKey)}catch{}
+        fields().forEach(field=>field.value='');
+        if(toggle)toggle.checked=false;
+        if(status)status.textContent='Saved details cleared.';
+        document.getElementById('buyer-first')?.focus();
+    });
+    toggle?.addEventListener('change',()=>{
+        if(!toggle.checked)return;
+        const pairs=[['buyer-first','attendee-0-first'],['buyer-last','attendee-0-last'],['buyer-email','attendee-0-email'],['buyer-phone','attendee-0-phone'],['buyer-country','attendee-0-country']];
+        pairs.forEach(([source,target])=>{const from=document.getElementById(source),to=document.getElementById(target);if(from&&to)to.value=from.value});
+        persist();
+    });
+})();
 </script>
 @if (Model.Order.Status == TicketOrderStatus.Pending)
 {

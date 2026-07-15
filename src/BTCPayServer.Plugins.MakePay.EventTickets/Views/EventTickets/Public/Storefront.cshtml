@@ -20,41 +20,166 @@
     <title>@Model.Settings.StorefrontTitle</title>
     <partial name="~/Views/EventTickets/Public/_Theme.cshtml" model="Model.Settings" />
     <style>
-        .event-directory{max-width:1180px;margin:auto;padding:70px 24px}.event-directory-header{max-width:760px;margin-bottom:44px}.event-directory-logo{max-height:64px;max-width:220px;margin-bottom:28px}.event-directory h1{font-size:clamp(2.6rem,6vw,5.8rem);line-height:.95;letter-spacing:-.055em;margin:0;text-transform:uppercase}.event-directory-lead{font-size:1.1rem;color:var(--et-muted);max-width:640px}.event-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:24px}.event-card{border:1px solid var(--et-border);border-radius:18px;overflow:hidden;background:var(--et-surface)}.event-card img{width:100%;aspect-ratio:16/10;object-fit:cover;background:var(--et-accent)}.event-card-content{padding:24px}.event-card h2{margin:0 0 8px}.event-card-meta{color:var(--et-muted);margin:0 0 14px}.event-card-copy{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}.event-empty{padding:34px;border:1px dashed var(--et-border);border-radius:16px;color:var(--et-muted)}
+        .event-storefront{min-height:100vh;background:var(--et-page)}
+        .event-storefront-width{width:min(1180px,calc(100% - 48px));margin-inline:auto}
+        .event-storefront-skip{position:fixed;top:10px;left:10px;z-index:1000;transform:translateY(-150%);padding:10px 14px;border-radius:8px;background:var(--et-surface);color:var(--et-text)!important;font-weight:800}.event-storefront-skip:focus{transform:none}
+        .event-storefront-announcement{min-height:38px;display:grid;place-items:center;padding:8px 24px;background:var(--et-accent);color:var(--et-accent-text);font-size:.78rem;font-weight:800;text-align:center}
+        .event-storefront-header{border-bottom:1px solid var(--et-border);background:color-mix(in srgb,var(--et-surface) 94%,transparent)}
+        .event-storefront-nav{min-height:82px;display:flex;align-items:center;justify-content:space-between;gap:28px}
+        .event-storefront-brand{display:flex;align-items:center;min-width:0;color:var(--et-text)!important;text-decoration:none;font-weight:900;letter-spacing:.02em;text-transform:uppercase}
+        .event-storefront-logo{display:block;max-width:210px;max-height:48px;object-fit:contain;object-position:left center}
+        .event-storefront-menu{display:flex;align-items:center;justify-content:center;gap:30px;margin-left:auto}.event-storefront-menu a{color:var(--et-text);text-decoration:none;font-size:.9rem;font-weight:750}.event-storefront-menu a:hover{text-decoration:underline}
+        .event-storefront-main{padding:36px 0 70px}
+        .event-storefront-hero{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(340px,.95fr);min-height:440px;border:1px solid var(--et-border);border-radius:24px;overflow:hidden;background:var(--et-soft)}
+        .event-storefront-hero-copy{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:clamp(38px,6vw,76px)}
+        .event-storefront-hero h1{max-width:12ch;margin:0;font-size:clamp(2.8rem,6vw,5.9rem);line-height:.92;letter-spacing:-.055em;text-transform:uppercase;overflow-wrap:anywhere}
+        .event-storefront-lead{max-width:580px;margin:22px 0 0;color:var(--et-muted);font-size:1.08rem}
+        .event-storefront-hero-actions{display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin-top:30px}.event-storefront-trust{color:var(--et-muted);font-size:.82rem;font-weight:700}
+        .event-storefront-hero-visual{position:relative;min-height:360px;overflow:hidden;background:var(--et-accent)}
+        .event-storefront-hero-visual>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.event-storefront-hero-visual::after{content:"";position:absolute;inset:0;background:linear-gradient(135deg,transparent 35%,rgba(0,0,0,.35))}
+        .event-storefront-visual-card{position:absolute;right:28px;bottom:28px;z-index:1;max-width:260px;padding:18px 20px;border:1px solid rgba(255,255,255,.35);border-radius:16px;background:rgba(11,21,40,.82);color:#fff;backdrop-filter:blur(12px)}.event-storefront-visual-card strong{display:block;font-size:1.05rem}.event-storefront-visual-card span{display:block;margin-top:4px;color:#d0d5dd;font-size:.8rem}
+        .event-storefront-benefits{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin:24px 0 68px}.event-storefront-benefit{padding:22px;border:1px solid var(--et-border);border-radius:16px;background:var(--et-surface)}.event-storefront-benefit span{display:grid;place-items:center;width:36px;height:36px;margin-bottom:14px;border-radius:10px;background:color-mix(in srgb,var(--et-accent) 12%,var(--et-surface));color:var(--et-accent);font-weight:900}.event-storefront-benefit strong{display:block}.event-storefront-benefit p{margin:5px 0 0;color:var(--et-muted);font-size:.86rem}
+        .event-directory-heading{display:flex;align-items:end;justify-content:space-between;gap:24px;margin-bottom:28px}.event-directory-heading h2{margin:0;font-size:clamp(2rem,4vw,3.5rem);line-height:1;letter-spacing:-.045em}.event-directory-heading p{max-width:470px;margin:0;color:var(--et-muted)}
+        .event-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:24px}.event-card{display:flex;min-width:0;flex-direction:column;border:1px solid var(--et-border);border-radius:20px;overflow:hidden;background:var(--et-surface);box-shadow:0 10px 28px rgba(16,24,40,.06);transition:transform .2s ease,box-shadow .2s ease}.event-card:hover{transform:translateY(-3px);box-shadow:0 18px 38px rgba(16,24,40,.1)}
+        .event-card-media{position:relative;display:block;aspect-ratio:16/10;overflow:hidden;background:color-mix(in srgb,var(--et-accent) 78%,#0b1528)}.event-card-media img{width:100%;height:100%;object-fit:cover;transition:transform .3s ease}.event-card:hover .event-card-media img{transform:scale(1.025)}.event-card-placeholder{position:absolute;inset:0;display:grid;place-items:center;padding:26px;color:var(--et-accent-text);font-size:clamp(1.45rem,3vw,2.25rem);font-weight:900;line-height:1;text-align:center;text-transform:uppercase}.event-card-date{position:absolute;top:16px;left:16px;z-index:1;min-width:64px;padding:9px;border-radius:12px;background:rgba(255,255,255,.94);color:#101828;text-align:center;box-shadow:0 6px 18px rgba(16,24,40,.14)}.event-card-date strong,.event-card-date span{display:block}.event-card-date strong{font-size:1.25rem;line-height:1}.event-card-date span{margin-top:3px;font-size:.68rem;font-weight:850;letter-spacing:.08em;text-transform:uppercase}
+        .event-card-content{display:flex;flex:1;flex-direction:column;padding:24px}.event-card-kicker{margin:0 0 10px;color:var(--et-accent);font-size:.72rem;font-weight:850;letter-spacing:.11em;text-transform:uppercase}.event-card h3{margin:0 0 9px;font-size:1.35rem;line-height:1.15}.event-card-meta{margin:0 0 16px;color:var(--et-muted);font-size:.88rem}.event-card-copy{display:-webkit-box;min-height:4.2em;margin:0 0 22px;overflow:hidden;color:var(--et-muted);-webkit-box-orient:vertical;-webkit-line-clamp:3}.event-card-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:auto;padding-top:18px;border-top:1px solid var(--et-border)}.event-card-price{font-size:.82rem;color:var(--et-muted)}.event-card-price strong{display:block;color:var(--et-text);font-size:1rem}
+        .event-empty{padding:50px;border:1px dashed var(--et-border);border-radius:20px;background:var(--et-soft);color:var(--et-muted);text-align:center}.event-empty strong{display:block;margin-bottom:6px;color:var(--et-text);font-size:1.2rem}
+        .event-storefront-footer{padding:0 24px 42px}.event-storefront-footer .et-footer{margin-top:0}
+        @@media(max-width:900px){.event-storefront-hero{grid-template-columns:1fr}.event-storefront-hero-visual{min-height:310px;grid-row:1}.event-storefront-benefits{grid-template-columns:1fr}.event-directory-heading{align-items:flex-start;flex-direction:column}.event-storefront-menu{display:none}}
+        @@media(max-width:620px){.event-storefront-width{width:min(100% - 30px,1180px)}.event-storefront-nav{min-height:70px}.event-storefront-nav>.et-primary{display:none}.event-storefront-main{padding-top:18px}.event-storefront-hero{border-radius:18px}.event-storefront-hero-copy{padding:34px 24px}.event-storefront-hero h1{font-size:clamp(2.5rem,14vw,4.2rem)}.event-storefront-visual-card{right:16px;bottom:16px;left:16px;max-width:none}.event-storefront-benefits{margin-bottom:50px}.event-card-footer{align-items:flex-start;flex-direction:column}.event-card-footer .et-primary{width:100%}.event-storefront-footer{padding:0 15px 30px}}
+        @@media(prefers-reduced-motion:reduce){.event-card,.event-card-media img{transition:none}.event-card:hover{transform:none}.event-card:hover .event-card-media img{transform:none}}
     </style>
 </head>
 <body class="et-public">
 <partial name="~/Views/EventTickets/Public/_Analytics.cshtml" model="analyticsContext" />
-<main class="event-directory">
-    <header class="event-directory-header">
-        @if (!string.IsNullOrWhiteSpace(Model.Settings.LogoUrl)) { <img class="event-directory-logo" src="@Model.Settings.LogoUrl" alt="@Model.Settings.StorefrontTitle"> }
-        <p class="et-eyebrow">MakePay event tickets</p>
-        <h1>@Model.Settings.StorefrontTitle</h1>
-        <p class="event-directory-lead">@Model.Settings.StorefrontDescription</p>
-    </header>
-    @if (Model.Events.Count == 0)
+<a class="event-storefront-skip" href="#events">Skip to events</a>
+<div class="event-storefront">
+    @if (!string.IsNullOrWhiteSpace(Model.Settings.HeroSubheadline))
     {
-        <div class="event-empty">There are no published events right now.</div>
+        <div class="event-storefront-announcement">@Model.Settings.HeroSubheadline</div>
     }
-    else
-    {
-        <section class="event-grid">
-            @foreach (var item in Model.Events)
+    <header class="event-storefront-header">
+        <div class="event-storefront-width event-storefront-nav">
+            <a class="event-storefront-brand" asp-action="Storefront" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" aria-label="@Model.Settings.StorefrontTitle home">
+                @if (!string.IsNullOrWhiteSpace(Model.Settings.LogoUrl))
+                {
+                    <img class="event-storefront-logo" src="@Model.Settings.LogoUrl" width="210" height="48" decoding="async" alt="@Model.Settings.StorefrontTitle">
+                }
+                else
+                {
+                    @Model.Settings.StorefrontTitle
+                }
+            </a>
+            <nav class="event-storefront-menu" aria-label="Store navigation">
+                <a href="#events">Events</a>
+                <a href="#how-it-works">How it works</a>
+            </nav>
+            <a class="et-primary" href="#events">Browse events</a>
+        </div>
+    </header>
+
+    <main class="event-storefront-width event-storefront-main">
+        <section class="event-storefront-hero" aria-labelledby="event-storefront-title">
+            <div class="event-storefront-hero-copy">
+                <p class="et-eyebrow">Upcoming experiences</p>
+                <h1 id="event-storefront-title">@Model.Settings.StorefrontTitle</h1>
+                <p class="event-storefront-lead">@Model.Settings.StorefrontDescription</p>
+                <div class="event-storefront-hero-actions">
+                    <a class="et-primary" href="#events">Explore tickets</a>
+                    <span class="event-storefront-trust">Secure checkout · direct BTCPay settlement</span>
+                </div>
+            </div>
+            <div class="event-storefront-hero-visual" aria-hidden="true">
+                @if (!string.IsNullOrWhiteSpace(Model.Settings.HeroImageUrl))
+                {
+                    <img src="@Model.Settings.HeroImageUrl" width="1600" height="1000" loading="eager" decoding="async" fetchpriority="high" alt="">
+                }
+                <div class="event-storefront-visual-card">
+                    <strong>@Model.Events.Count upcoming event@(Model.Events.Count == 1 ? "" : "s")</strong>
+                    <span>Choose your experience and pay with a method enabled by this BTCPay Server.</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="event-storefront-benefits" id="how-it-works" aria-label="How ticketing works">
+            <article class="event-storefront-benefit"><span>1</span><strong>Choose your tickets</strong><p>See event details, transparent pricing, and live availability.</p></article>
+            <article class="event-storefront-benefit"><span>2</span><strong>Pay with BTCPay</strong><p>Complete the secure checkout without leaving the event experience.</p></article>
+            <article class="event-storefront-benefit"><span>3</span><strong>Receive your passes</strong><p>Download ticket PDFs and available mobile-wallet passes after payment.</p></article>
+        </section>
+
+        <section id="events" aria-labelledby="event-directory-title">
+            <div class="event-directory-heading">
+                <div><p class="et-eyebrow">Tickets on sale</p><h2 id="event-directory-title">Upcoming events</h2></div>
+                <p>Select an event to see ticket types, live capacity, venue information, and checkout details.</p>
+            </div>
+            @if (Model.Events.Count == 0)
             {
-                <article class="event-card">
-                    @if (!string.IsNullOrWhiteSpace(item.BannerUrl ?? Model.Settings.HeroImageUrl)) { <img src="@(item.BannerUrl ?? Model.Settings.HeroImageUrl)" alt=""> }
-                    <div class="event-card-content">
-                        <h2>@item.Name</h2>
-                        <p class="event-card-meta">@item.StartsAt.ToString("ddd, dd MMM yyyy · HH:mm")<br>@item.VenueName</p>
-                        <p class="event-card-copy">@item.Description</p>
-                        <a class="et-primary" data-select-event="@item.Id" asp-action="Event" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@item.Slug">View tickets</a>
-                    </div>
-                </article>
+                <div class="event-empty"><strong>No published events yet</strong>New experiences will appear here as soon as tickets go on sale.</div>
+            }
+            else
+            {
+                <div class="event-grid">
+                    @foreach (var item in Model.Events)
+                    {
+                        Model.Remaining.TryGetValue(item.Id, out var remaining);
+                        remaining ??= new Dictionary<string, int?>();
+                        var configuredTypes = item.TicketTypes.Where(type => type.Active && type.MaxPerOrder > 0).ToList();
+                        var purchasableTypes = configuredTypes.Where(type => !remaining.TryGetValue(type.Id, out var available) || available is null || available > 0).ToList();
+                        var soldOut = configuredTypes.Count > 0 && purchasableTypes.Count == 0;
+                        var startingPrice = purchasableTypes.Count > 0 ? purchasableTypes.Min(type => type.Price) : (decimal?)null;
+                        var artwork = item.BannerUrl ?? Model.Settings.HeroImageUrl;
+                        <article class="event-card">
+                            <a class="event-card-media" data-select-event="@item.Id" asp-action="Event" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@item.Slug" aria-label="View tickets for @item.Name">
+                                @if (!string.IsNullOrWhiteSpace(artwork))
+                                {
+                                    <img src="@artwork" width="1600" height="1000" loading="lazy" decoding="async" alt="@item.Name event artwork">
+                                }
+                                else
+                                {
+                                    <span class="event-card-placeholder">@item.Name</span>
+                                }
+                                <span class="event-card-date"><strong>@item.StartsAt.ToString("dd")</strong><span>@item.StartsAt.ToString("MMM")</span></span>
+                            </a>
+                            <div class="event-card-content">
+                                <p class="event-card-kicker">@item.StartsAt.ToString("dddd · HH:mm")</p>
+                                <h3>@item.Name</h3>
+                                <p class="event-card-meta">@item.VenueName@if (!string.IsNullOrWhiteSpace(item.VenueAddress)) {<text> · @item.VenueAddress</text>}</p>
+                                <p class="event-card-copy">@item.Description</p>
+                                <div class="event-card-footer">
+                                    <span class="event-card-price">
+                                        @if (soldOut)
+                                        {
+                                            <strong>Sold out</strong>
+                                        }
+                                        else if (startingPrice is not null)
+                                        {
+                                            <text>Tickets from<strong>@startingPrice.Value.ToString("0.##") @Model.Settings.Currency</strong></text>
+                                        }
+                                        else
+                                        {
+                                            <strong>Registration details</strong>
+                                        }
+                                    </span>
+                                    @if (soldOut)
+                                    {
+                                        <span class="et-secondary is-disabled" aria-disabled="true">Sold out</span>
+                                    }
+                                    else
+                                    {
+                                        <a class="et-primary" data-select-event="@item.Id" asp-action="Event" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@item.Slug">View tickets</a>
+                                    }
+                                </div>
+                            </div>
+                        </article>
+                    }
+                </div>
             }
         </section>
-    }
-    <partial name="~/Views/EventTickets/Public/_Footer.cshtml" model="Model.Settings" />
-</main>
+    </main>
+    <div class="event-storefront-footer">
+        <partial name="~/Views/EventTickets/Public/_Footer.cshtml" model="Model.Settings" />
+    </div>
+</div>
 <script>
 (()=>{const ecommerce=@Html.Raw(System.Text.Json.JsonSerializer.Serialize(analyticsEcommerce)),analytics=window.makePayAnalytics;analytics?.track('view_item_list',{ecommerce});document.querySelectorAll('[data-select-event]').forEach(link=>link.addEventListener('click',()=>{const items=ecommerce.items.filter(item=>item.item_id===link.dataset.selectEvent),value=items.reduce((sum,item)=>sum+Number(item.price||0)*Number(item.quantity||1),0);analytics?.track('select_item',{ecommerce:{currency:ecommerce.currency,value,item_list_id:link.dataset.selectEvent,item_list_name:items[0]?.item_list_name||'',items}})}))})();
 </script>

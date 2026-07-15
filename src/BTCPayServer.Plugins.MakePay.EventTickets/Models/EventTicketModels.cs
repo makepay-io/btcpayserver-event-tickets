@@ -255,7 +255,7 @@ public sealed class EventTicketsDashboardViewModel
     public string? MappedBaseUrl { get; init; }
 }
 
-public sealed class EventStorefrontViewModel { public required string StoreId { get; init; } public required EventTicketSettings Settings { get; init; } public required IReadOnlyList<TicketEvent> Events { get; init; } public bool CleanUrls { get; init; } }
+public sealed class EventStorefrontViewModel { public required string StoreId { get; init; } public required EventTicketSettings Settings { get; init; } public required IReadOnlyList<TicketEvent> Events { get; init; } public required IReadOnlyDictionary<string, Dictionary<string, int?>> Remaining { get; init; } public bool CleanUrls { get; init; } }
 public sealed class EventDetailViewModel { public required string StoreId { get; init; } public required EventTicketSettings Settings { get; init; } public required TicketEvent Event { get; init; } public required Dictionary<string, int?> Remaining { get; init; } public bool PosMode { get; init; } public bool CleanUrls { get; init; } }
 
 public sealed class EventTicketAnalyticsContext

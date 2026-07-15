@@ -35,43 +35,228 @@
     .et-analytics-preferences{position:fixed;z-index:9999;left:16px;bottom:16px;border:1px solid var(--et-border,#e4e7ec);border-radius:999px;padding:8px 12px;background:var(--et-surface,#fff);color:var(--et-muted,#667085);box-shadow:0 8px 24px rgba(16,24,40,.12);font:700 .75rem/1.2 var(--et-font,system-ui,sans-serif);cursor:pointer}
     @@media(max-width:620px){.et-analytics-consent{left:12px;right:12px;bottom:12px}.et-analytics-actions button{width:100%}}
 </style>
-<div class="et-analytics-consent" data-et-analytics-consent role="dialog" aria-modal="true" aria-labelledby="et-analytics-title" hidden>
+<div class="et-analytics-consent" data-et-analytics-consent role="dialog" aria-modal="true" aria-labelledby="et-analytics-title" aria-describedby="et-analytics-description" tabindex="-1" hidden>
     <strong id="et-analytics-title">Analytics preferences</strong>
-    <p>Help us understand how this ticket shop is used. MakePay analytics events never include names, email addresses, phone numbers, attendee details, payment addresses, or access tokens.@if (!string.IsNullOrWhiteSpace(Model.Settings.PrivacyUrl)) { <text> <a href="@Model.Settings.PrivacyUrl" target="_blank" rel="noopener noreferrer">Privacy policy</a></text> }</p>
+    <p id="et-analytics-description">Help us understand how this ticket shop is used. MakePay analytics events never include names, email addresses, phone numbers, attendee details, payment addresses, or access tokens.@if (!string.IsNullOrWhiteSpace(Model.Settings.PrivacyUrl)) { <text> <a href="@Model.Settings.PrivacyUrl" target="_blank" rel="noopener noreferrer">Privacy policy</a></text> }</p>
     <div class="et-analytics-actions"><button class="et-analytics-accept" type="button" data-et-analytics-accept>Allow analytics</button><button class="et-analytics-decline" type="button" data-et-analytics-decline>Only necessary</button></div>
 </div>
 <button class="et-analytics-preferences" type="button" data-et-analytics-preferences hidden>Analytics preferences</button>
 <script>
 ((config)=>{
-    const root=window,layer=root.dataLayer=root.dataLayer||[],providerConfigured=config.provider!=='disabled'&&Boolean(config.providerId),nonce=document.querySelector('[nonce]')?.nonce||'';
-    const sanitizePagePath=value=>{const path=typeof value==='string'&&value.startsWith('/')?value:'/';return path.replace(/(\/events\/[^/]+\/checkout\/)[^/]+/gi,'$1:order_id').replace(/(\/events\/order\/)[^/]+/gi,'$1:order_id')};
-    const safePath=sanitizePagePath(location.pathname),safeLocation=location.origin+safePath,safeReferrer=(()=>{try{const value=new URL(document.referrer);return value.origin+sanitizePagePath(value.pathname)}catch{return''}})();
-    const makepay=Object.freeze({plugin:'event_tickets',store_id:config.storeId,schema_version:'1'}),context=Object.freeze({page_type:config.pageType,event_id:config.eventId||undefined,event_slug:config.eventSlug||undefined,page_location:safeLocation,page_path:safePath,page_referrer:safeReferrer||undefined});
+    'use strict';
+
+    const root=window;
+    const layer=root.dataLayer=root.dataLayer||[];
+    const providerConfigured=config.provider!=='disabled'&&Boolean(config.providerId);
+    const nonce=document.querySelector('[nonce]')?.nonce||'';
+    const sanitizePagePath=value=>{
+        const path=typeof value==='string'&&value.startsWith('/')?value:'/';
+        return path
+            .replace(/(\/events\/[^/]+\/checkout\/)[^/]+/gi,'$1:order_id')
+            .replace(/(\/events\/order\/)[^/]+/gi,'$1:order_id');
+    };
+    const safePath=sanitizePagePath(location.pathname);
+    const safeLocation=location.origin+safePath;
+    const safeReferrer=(()=>{
+        if(!document.referrer)return'';
+        try{const value=new URL(document.referrer);return value.origin+sanitizePagePath(value.pathname)}catch{return''}
+    })();
+    const makepay=Object.freeze({plugin:'event_tickets',store_id:config.storeId,schema_version:'1'});
+    const context=Object.freeze({page_type:config.pageType,event_id:config.eventId||undefined,event_slug:config.eventSlug||undefined,page_location:safeLocation,page_path:safePath,page_referrer:safeReferrer||undefined});
     const consentGrantedEvent=@Html.Raw(JsonSerializer.Serialize(TicketAnalytics.ConsentGrantedEvent));
-    const consentKey=`makepay:analytics:consent:v1:event_tickets:${config.storeId}`,oncePrefix=`makepay:analytics:once:v1:event_tickets:${config.storeId}:${config.provider}`;
-    const consent=document.querySelector('[data-et-analytics-consent]'),preferences=document.querySelector('[data-et-analytics-preferences]'),accept=document.querySelector('[data-et-analytics-accept]'),decline=document.querySelector('[data-et-analytics-decline]');
-    const dnt=config.respectDoNotTrack&&(navigator.doNotTrack==='1'||navigator.doNotTrack==='yes'||root.doNotTrack==='1');
-    let collectionAllowed=!providerConfigured&&!dnt,externalActive=false,externalStarted=false,pageViewSent=false;
+    const consentKey=`makepay:analytics:consent:v1:event_tickets:${config.storeId}`;
+    const oncePrefix=`makepay:analytics:once:v1:event_tickets:${config.storeId}`;
+    const consent=document.querySelector('[data-et-analytics-consent]');
+    const preferences=document.querySelector('[data-et-analytics-preferences]');
+    const accept=document.querySelector('[data-et-analytics-accept]');
+    const decline=document.querySelector('[data-et-analytics-decline]');
+    const dnt=config.respectDoNotTrack&&(
+        navigator.doNotTrack==='1'||
+        navigator.doNotTrack==='yes'||
+        navigator.msDoNotTrack==='1'||
+        root.doNotTrack==='1'||
+        root.doNotTrack==='yes'
+    );
     const storage={get:(kind,key)=>{try{return (kind==='session'?sessionStorage:localStorage).getItem(key)}catch{return null}},set:(kind,key,value)=>{try{(kind==='session'?sessionStorage:localStorage).setItem(key,value)}catch{}}};
+    let consentChoice=storage.get('local',consentKey);
+    let collectionAllowed=!providerConfigured&&!dnt;
+    let externalActive=false;
+    let externalStarted=false;
+    let pageViewSent=false;
+    let contextSent=false;
+    let lastFocused=null;
+    const queuedEvents=[];
+    const queuedOnceKeys=new Set();
+    const emittedOnceKeys=new Set();
+    const maxQueuedEvents=100;
+
     const gtag=root.gtag=root.gtag||function(){layer.push(arguments)};
     const consentUpdate=granted=>gtag('consent','update',{analytics_storage:granted?'granted':'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',functionality_storage:'granted',security_storage:'granted'});
-    if(providerConfigured)gtag('consent','default',{analytics_storage:config.requireConsent?'denied':'granted',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',functionality_storage:'granted',security_storage:'granted',wait_for_update:500});
-    const directPayload=payload=>{const source=payload||{},ecommerce=source.ecommerce||{},rest={...source};delete rest.ecommerce;return {...rest,...ecommerce,makepay_plugin:makepay.plugin,makepay_store_id:makepay.store_id,makepay_schema_version:makepay.schema_version,page_type:context.page_type,event_public_id:context.event_id,page_location:safeLocation,page_path:safePath,page_referrer:safeReferrer||undefined}};
+    if(providerConfigured)gtag('consent','default',{analytics_storage:!dnt&&(!config.requireConsent||consentChoice==='granted')?'granted':'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',functionality_storage:'granted',security_storage:'granted',wait_for_update:500});
+
+    const finiteNumber=value=>{const number=Number(value);return Number.isFinite(number)?number:0};
+    const safeText=(value,maxLength=160)=>typeof value==='string'?value.replace(/[\u0000-\u001f\u007f]/g,'').trim().slice(0,maxLength):'';
+    const copyPublicText=(target,source,key,maxLength=160)=>{const value=safeText(source?.[key],maxLength);if(value)target[key]=value};
+    const sanitizeItem=value=>{
+        const source=value&&typeof value==='object'?value:{};
+        const item={};
+        for(const key of ['item_id','item_name','item_variant','ticket_type_id','item_category','item_list_id','item_list_name'])copyPublicText(item,source,key);
+        item.price=finiteNumber(source.price);
+        if(source.discount!==undefined)item.discount=finiteNumber(source.discount);
+        item.quantity=Math.max(1,Math.trunc(finiteNumber(source.quantity)||1));
+        return item;
+    };
+    const sanitizeEcommerce=value=>{
+        const source=value&&typeof value==='object'?value:{};
+        const ecommerce={};
+        const currency=safeText(source.currency,12).toUpperCase();
+        if(/^[A-Z0-9]{2,12}$/.test(currency))ecommerce.currency=currency;
+        if(source.value!==undefined)ecommerce.value=finiteNumber(source.value);
+        for(const key of ['coupon','payment_type','item_list_id','item_list_name'])copyPublicText(ecommerce,source,key);
+        const transactionId=safeText(source.transaction_id,80).toLowerCase();
+        if(/^mpt_[a-f0-9]{64}$/.test(transactionId))ecommerce.transaction_id=transactionId;
+        ecommerce.items=Array.isArray(source.items)?source.items.slice(0,100).map(sanitizeItem):[];
+        return ecommerce;
+    };
+    const sanitizePayload=payload=>({ecommerce:sanitizeEcommerce(payload&&typeof payload==='object'?payload.ecommerce:null)});
+    const safeEventName=name=>typeof name==='string'&&/^[a-z][a-z0-9_]{0,63}$/.test(name)?name:'';
+    const opaqueOnceId=value=>{
+        const source=String(value??'');
+        if(/^mpt_[a-f0-9]{64}$/i.test(source))return source.toLowerCase();
+        let hash=2166136261;
+        for(let index=0;index<source.length;index++){hash^=source.charCodeAt(index);hash=Math.imul(hash,16777619)}
+        return `opaque_${(hash>>>0).toString(16).padStart(8,'0')}`;
+    };
+    const onceKey=(name,uniqueId)=>`${oncePrefix}:${name}:${opaqueOnceId(uniqueId)}`;
+    const hasEmitted=key=>emittedOnceKeys.has(key.value)||storage.get(key.kind,key.value)==='1';
+    const markEmitted=key=>{emittedOnceKeys.add(key.value);storage.set(key.kind,key.value,'1')};
+    const consentPending=()=>providerConfigured&&!dnt&&config.requireConsent&&consentChoice!=='granted'&&consentChoice!=='denied';
+
+    const directPayload=payload=>{const ecommerce=payload?.ecommerce||{};return {...ecommerce,makepay_plugin:makepay.plugin,makepay_store_id:makepay.store_id,makepay_schema_version:makepay.schema_version,page_type:context.page_type,event_public_id:context.event_id,page_location:safeLocation,page_path:safePath,page_referrer:safeReferrer||undefined}};
     const sendDirect=(name,payload)=>gtag('event',name,directPayload(payload));
     const sendSafePageView=()=>{if(config.provider!=='ga4'||pageViewSent)return;pageViewSent=true;gtag('event','page_view',{page_title:document.title,page_location:safeLocation,page_path:safePath,page_referrer:safeReferrer||undefined,makepay_plugin:makepay.plugin,makepay_store_id:makepay.store_id,makepay_schema_version:makepay.schema_version,page_type:context.page_type,event_public_id:context.event_id})};
-    const pushContext=()=>{layer.push({event:'page_context',makepay,...context});if(config.provider!=='ga4')layer.push({event:'page_view',makepay,...context,page_title:document.title})};
-    const loadExternal=()=>{if(!providerConfigured)return;if(externalStarted){externalActive=true;consentUpdate(true);if(config.provider==='ga4'){pageViewSent=false;sendSafePageView()}return}externalStarted=true;externalActive=true;consentUpdate(true);if(config.provider==='gtm'){layer.push({'gtm.start':Date.now(),event:'gtm.js'});const script=document.createElement('script');script.async=true;script.src=`https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(config.providerId)}`;if(nonce)script.nonce=nonce;document.head.appendChild(script)}else{const script=document.createElement('script');script.async=true;script.src=`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(config.providerId)}`;if(nonce)script.nonce=nonce;document.head.appendChild(script);gtag('js',new Date());gtag('config',config.providerId,{send_page_view:false,allow_google_signals:false,allow_ad_personalization_signals:false});sendSafePageView()}};
-    const track=(name,payload={})=>{if(!collectionAllowed)return false;layer.push({ecommerce:null});layer.push({event:name,makepay,...context,...payload});if(config.provider==='ga4'&&externalActive)sendDirect(name,payload);return true};
-    const trackOnce=(name,uniqueId,payload={},kind='session')=>{if(!collectionAllowed)return false;const key=`${oncePrefix}:${name}:${String(uniqueId)}`;if(storage.get(kind,key)==='1')return false;track(name,payload);storage.set(kind,key,'1');return true};
+    const pushContext=()=>{if(contextSent)return;contextSent=true;layer.push({event:'page_context',makepay,...context});if(config.provider!=='ga4')layer.push({event:'page_view',makepay,...context,page_title:document.title})};
+    const loadExternal=()=>{
+        if(!providerConfigured)return;
+        if(externalStarted){externalActive=true;consentUpdate(true);return}
+        externalStarted=true;
+        externalActive=true;
+        consentUpdate(true);
+        if(config.provider==='gtm'){
+            layer.push({'gtm.start':Date.now(),event:'gtm.js'});
+            const script=document.createElement('script');
+            script.async=true;
+            script.src=`https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(config.providerId)}`;
+            if(nonce)script.nonce=nonce;
+            document.head.appendChild(script);
+        }else{
+            const script=document.createElement('script');
+            script.async=true;
+            script.src=`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(config.providerId)}`;
+            if(nonce)script.nonce=nonce;
+            document.head.appendChild(script);
+            gtag('js',new Date());
+            gtag('config',config.providerId,{send_page_view:false,allow_google_signals:false,allow_ad_personalization_signals:false});
+            sendSafePageView();
+        }
+    };
+    const emit=(name,payload)=>{layer.push({ecommerce:null});layer.push({event:name,makepay,...context,...payload});if(config.provider==='ga4'&&externalActive)sendDirect(name,payload);return true};
+    const enqueue=(name,payload,key=null)=>{
+        if(!consentPending())return false;
+        if(key&&queuedOnceKeys.has(key.value))return false;
+        if(queuedEvents.length>=maxQueuedEvents){const removed=queuedEvents.shift();if(removed?.key)queuedOnceKeys.delete(removed.key.value)}
+        queuedEvents.push({name,payload,key});
+        if(key)queuedOnceKeys.add(key.value);
+        return true;
+    };
+    const flushQueue=()=>{
+        if(!collectionAllowed||queuedEvents.length===0)return;
+        const pending=queuedEvents.splice(0,queuedEvents.length);
+        queuedOnceKeys.clear();
+        for(const item of pending){
+            if(item.key&&hasEmitted(item.key))continue;
+            if(item.key)markEmitted(item.key);
+            emit(item.name,item.payload);
+        }
+    };
+    const clearQueue=()=>{queuedEvents.splice(0,queuedEvents.length);queuedOnceKeys.clear()};
+    const track=(name,payload={})=>{
+        const eventName=safeEventName(name);
+        if(!eventName)return false;
+        const safePayload=sanitizePayload(payload);
+        if(collectionAllowed)return emit(eventName,safePayload);
+        return enqueue(eventName,safePayload);
+    };
+    const trackOnce=(name,uniqueId,payload={},kind='session')=>{
+        const eventName=safeEventName(name);
+        if(!eventName)return false;
+        if(uniqueId===undefined||uniqueId===null||uniqueId==='')return track(eventName,payload);
+        const key={kind:kind==='local'?'local':'session',value:onceKey(eventName,uniqueId)};
+        if(hasEmitted(key))return false;
+        const safePayload=sanitizePayload(payload);
+        if(collectionAllowed){markEmitted(key);return emit(eventName,safePayload)}
+        return enqueue(eventName,safePayload,key);
+    };
     const purchaseOnce=(transactionId,payload)=>trackOnce('purchase',transactionId,payload,'local');
-    const enableCollection=()=>{collectionAllowed=true;consentUpdate(true);gtag('set',{page_location:safeLocation,page_path:safePath,page_referrer:safeReferrer||undefined});pushContext();loadExternal()};
-    const showConsent=()=>{if(!providerConfigured||!config.requireConsent)return;consent.hidden=false;preferences.hidden=true;setTimeout(()=>accept.focus(),0)};
-    const hideConsent=()=>{consent.hidden=true;preferences.hidden=!providerConfigured||!config.requireConsent};
-    const saveChoice=value=>storage.set('local',consentKey,value);
-    accept.addEventListener('click',()=>{saveChoice('granted');hideConsent();enableCollection();dispatchEvent(new CustomEvent(consentGrantedEvent))});
-    decline.addEventListener('click',()=>{const reloadWithoutProvider=externalStarted;saveChoice('denied');collectionAllowed=false;externalActive=false;consentUpdate(false);hideConsent();if(reloadWithoutProvider)location.reload()});
-    preferences.addEventListener('click',showConsent);
-    root.makePayAnalytics=Object.freeze({track,trackOnce,purchaseOnce,openConsent:showConsent,isCollecting:()=>collectionAllowed,context:makepay});
-    if(!providerConfigured){hideConsent();if(!dnt)pushContext();return}if(dnt){collectionAllowed=false;consentUpdate(false);consent.hidden=true;preferences.hidden=true;return}const choice=storage.get('local',consentKey);if(!config.requireConsent||choice==='granted'){hideConsent();enableCollection()}else if(choice==='denied'){collectionAllowed=false;consentUpdate(false);hideConsent()}else{collectionAllowed=false;showConsent()}
+    const enableCollection=()=>{collectionAllowed=true;consentUpdate(true);gtag('set',{page_location:safeLocation,page_path:safePath,page_referrer:safeReferrer||undefined});pushContext();loadExternal();flushQueue()};
+
+    const focusableElements=()=>[...consent.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')].filter(element=>!element.hidden&&element.getClientRects().length>0);
+    const restoreFocus=()=>{
+        const target=lastFocused instanceof HTMLElement&&lastFocused.isConnected&&lastFocused!==document.body&&lastFocused!==document.documentElement?lastFocused:preferences;
+        lastFocused=null;
+        setTimeout(()=>target?.focus(),0);
+    };
+    const showConsent=trigger=>{
+        if(!providerConfigured||!config.requireConsent||dnt)return;
+        if(consent.hidden){lastFocused=trigger instanceof HTMLElement?trigger:document.activeElement instanceof HTMLElement?document.activeElement:null}
+        consent.hidden=false;
+        preferences.hidden=true;
+        setTimeout(()=>{const first=focusableElements()[0];(first||consent).focus()},0);
+    };
+    const hideConsent=(shouldRestore=false)=>{
+        consent.hidden=true;
+        preferences.hidden=!providerConfigured||!config.requireConsent||dnt;
+        if(shouldRestore)restoreFocus();
+    };
+    const saveChoice=value=>{consentChoice=value;storage.set('local',consentKey,value)};
+
+    accept.addEventListener('click',()=>{
+        saveChoice('granted');
+        hideConsent(true);
+        enableCollection();
+        dispatchEvent(new CustomEvent(consentGrantedEvent));
+    });
+    decline.addEventListener('click',()=>{
+        const reloadWithoutProvider=externalStarted;
+        saveChoice('denied');
+        collectionAllowed=false;
+        externalActive=false;
+        clearQueue();
+        consentUpdate(false);
+        hideConsent(true);
+        if(reloadWithoutProvider)location.reload();
+    });
+    preferences.addEventListener('click',()=>showConsent(preferences));
+    consent.addEventListener('keydown',event=>{
+        if(event.key==='Escape'){
+            event.preventDefault();
+            event.stopPropagation();
+            hideConsent(true);
+            return;
+        }
+        if(event.key!=='Tab')return;
+        const focusable=focusableElements();
+        if(focusable.length===0){event.preventDefault();consent.focus();return}
+        const first=focusable[0],last=focusable[focusable.length-1];
+        if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus()}
+        else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus()}
+    });
+
+    root.makePayAnalytics=Object.freeze({track,trackOnce,purchaseOnce,openConsent:()=>showConsent(document.activeElement),isCollecting:()=>collectionAllowed,context:makepay});
+    if(!providerConfigured){hideConsent();if(!dnt){collectionAllowed=true;pushContext()}return}
+    if(dnt){collectionAllowed=false;clearQueue();consentUpdate(false);consent.hidden=true;preferences.hidden=true;return}
+    if(!config.requireConsent||consentChoice==='granted'){hideConsent();enableCollection()}
+    else if(consentChoice==='denied'){collectionAllowed=false;consentUpdate(false);hideConsent()}
+    else{collectionAllowed=false;showConsent()}
 })(@Html.Raw(JsonSerializer.Serialize(config)));
 </script>

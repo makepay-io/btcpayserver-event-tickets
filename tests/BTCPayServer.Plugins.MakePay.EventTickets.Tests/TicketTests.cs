@@ -142,6 +142,48 @@ public class TicketTests
     }
 
     [Fact]
+    public void EndedOrUnpublishedEventsCannotStartCheckout()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var item = Event();
+
+        item.EndsAt = now.AddMinutes(1);
+        Assert.True(TicketEventSalePolicy.CanStartCheckout(item, now));
+
+        item.EndsAt = now;
+        Assert.False(TicketEventSalePolicy.CanStartCheckout(item, now));
+
+        item.EndsAt = now.AddMinutes(1);
+        item.Published = false;
+        Assert.False(TicketEventSalePolicy.CanStartCheckout(item, now));
+    }
+
+    [Fact]
+    public void SensitivePublicActionsExplicitlyDisableBrowserAndProxyCaching()
+    {
+        var source = File.ReadAllText(RepositoryFile(
+            "src", "BTCPayServer.Plugins.MakePay.EventTickets", "Controllers", "EventTicketsPublicController.cs"));
+        var sensitiveActions = new[]
+        {
+            "StartCheckout", "Rebuy", "Cart", "ApplyPromotion", "Details", "CreatePayment",
+            "Payment", "OrderStatus", "Order", "Pdf", "AppleWallet"
+        };
+
+        foreach (var actionName in sensitiveActions)
+        {
+            var signature = $"public async Task<IActionResult> {actionName}";
+            var signatureIndex = source.IndexOf(signature, StringComparison.Ordinal);
+            Assert.True(signatureIndex >= 0, $"Could not find public action {actionName}.");
+            var attributeBlock = source[Math.Max(0, signatureIndex - 160)..signatureIndex];
+            Assert.Contains("[TicketNoStore]", attributeBlock, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("headers[\"Cache-Control\"] = \"no-store, no-cache, private, max-age=0, must-revalidate\"", source, StringComparison.Ordinal);
+        Assert.Contains("headers[\"Pragma\"] = \"no-cache\"", source, StringComparison.Ordinal);
+        Assert.Contains("headers[\"Expires\"] = \"0\"", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AnalyticsIdentifiersAcceptLowercasePasteAndRejectMalformedIds()
     {
         var valid = new EventTicketSettings
