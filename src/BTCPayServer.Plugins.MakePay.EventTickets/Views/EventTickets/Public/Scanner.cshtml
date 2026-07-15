@@ -11,7 +11,8 @@
             : null;
     var scannerConfig = JsonSerializer.Serialize(new
     {
-        checkInUrl = Model.CheckInUrl,
+        lookupUrl = Model.LookupUrl,
+        actionUrl = Model.ActionUrl,
         eventUrl = Model.EventUrl,
         eventKey = $"{Model.StoreId}:{Model.Event.Id}",
         autoCloseSeconds = Model.Settings.ScannerResultSeconds
@@ -37,10 +38,10 @@
         .scan-main{display:flex;flex:1;flex-direction:column;width:min(100%,560px);margin:0 auto;min-height:0}.scan-camera{position:relative;isolation:isolate;min-height:min(58svh,620px);border:1px solid var(--scan-border);border-radius:24px;background:#02060d;overflow:hidden;box-shadow:0 22px 50px rgba(0,0,0,.34)}.scan-camera .wrapper,.scan-camera .qrcode-stream-wrapper,.scan-camera video,.scan-camera canvas{width:100%!important;height:100%!important;min-height:min(58svh,620px);object-fit:cover}.scan-camera video{display:block}.scan-camera-overlay{position:absolute;z-index:2;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,.28),transparent 25%,transparent 72%,rgba(0,0,0,.55))}.scan-target{position:relative;width:min(68vw,310px);aspect-ratio:1;border-radius:24px;box-shadow:0 0 0 999px rgba(2,6,13,.34)}.scan-target::before,.scan-target::after,.scan-target span::before,.scan-target span::after{content:"";position:absolute;width:54px;height:54px;border-color:#fff;border-style:solid;filter:drop-shadow(0 2px 5px rgba(0,0,0,.35))}.scan-target::before{left:0;top:0;border-width:4px 0 0 4px;border-radius:20px 0 0}.scan-target::after{right:0;top:0;border-width:4px 4px 0 0;border-radius:0 20px 0 0}.scan-target span::before{left:0;bottom:0;border-width:0 0 4px 4px;border-radius:0 0 0 20px}.scan-target span::after{right:0;bottom:0;border-width:0 4px 4px 0;border-radius:0 0 20px}.scan-hint{position:absolute;bottom:22px;margin:0;border-radius:999px;background:rgba(3,10,21,.74);backdrop-filter:blur(8px);padding:8px 13px;color:#fff;font-size:.76rem;font-weight:750}
         .scan-camera-error{position:absolute;z-index:4;inset:0;display:grid;place-items:center;padding:28px;background:#08111f;text-align:center}.scan-camera-error strong{display:block;font-size:1.12rem;margin-bottom:7px}.scan-camera-error p{max-width:340px;margin:0 auto 18px;color:var(--scan-muted)}.scan-primary,.scan-secondary{display:inline-flex;align-items:center;justify-content:center;min-height:50px;border-radius:12px;padding:12px 18px;font-weight:800;text-decoration:none;cursor:pointer}.scan-primary{border:1px solid var(--scan-accent);background:var(--scan-accent);color:var(--scan-accent-text)}.scan-secondary{border:1px solid var(--scan-border);background:var(--scan-panel);color:var(--scan-text)}.scan-primary:disabled{opacity:.48;cursor:wait}
         .scan-controls{display:grid;gap:10px;margin-top:12px}.scan-setup{border:1px solid var(--scan-border);border-radius:16px;background:var(--scan-panel);overflow:hidden}.scan-setup summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:11px 14px;cursor:pointer;font-size:.82rem;font-weight:780;list-style:none}.scan-setup summary::-webkit-details-marker{display:none}.scan-gate-chip{max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-radius:999px;background:rgba(143,179,255,.1);padding:5px 9px;color:#a9c5ff;font-size:.7rem}.scan-setup-body{display:grid;gap:12px;border-top:1px solid var(--scan-border);padding:14px}.scan-label{display:block;margin-bottom:6px;color:var(--scan-muted);font-size:.72rem;font-weight:780}.scan-input{width:100%;min-height:48px;border:1px solid #40506a;border-radius:11px;background:#08111f;color:var(--scan-text);padding:11px 13px;outline:none}.scan-input:focus{border-color:var(--scan-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--scan-accent) 28%,transparent)}.scan-manual-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px}.scan-fallback{padding:12px;border:1px dashed #40506a;border-radius:12px;color:var(--scan-muted);font-size:.76rem}.scan-fallback input{max-width:100%}.scan-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:auto;padding:16px 3px 0;color:var(--scan-muted);font-size:.68rem}.scan-footer a{color:#bcd0f6;text-decoration:none}
-        .scan-result-backdrop{position:fixed;z-index:50;inset:0;display:flex;align-items:flex-end;justify-content:center;background:rgba(2,6,13,.76);backdrop-filter:blur(7px);padding:18px 14px calc(18px + var(--scan-safe-bottom))}.scan-result{width:min(100%,520px);border:1px solid var(--scan-border);border-radius:26px;background:#f8fafc;color:#101828;padding:24px;box-shadow:0 30px 90px rgba(0,0,0,.55);animation:scan-rise .18s ease-out}.scan-result-mark{display:grid;place-items:center;width:62px;height:62px;border-radius:50%;margin-bottom:17px;background:#dcfae6;color:#067647;font-size:2rem;font-weight:900}.scan-result.is-error .scan-result-mark{background:#fee4e2;color:#b42318}.scan-result.is-warning .scan-result-mark{background:#fef0c7;color:#b54708}.scan-result-kicker{margin:0 0 4px;color:#667085;font-size:.68rem;font-weight:850;letter-spacing:.13em;text-transform:uppercase}.scan-result h2{margin:0;font-size:clamp(1.75rem,8vw,2.25rem);line-height:1.08;letter-spacing:-.035em}.scan-result-message{margin:8px 0 0;color:#667085}.scan-person{margin-top:20px;border:1px solid #d0d5dd;border-radius:15px;background:#fff;padding:16px}.scan-person strong{display:block;font-size:1.25rem}.scan-person span{display:block;margin-top:3px;color:#667085}.scan-result-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 0}.scan-result-meta div{border-radius:12px;background:#eef2f6;padding:11px}.scan-result-meta small{display:block;color:#667085;font-size:.65rem;font-weight:800;text-transform:uppercase}.scan-result-meta b{display:block;margin-top:3px;font-size:.8rem;overflow-wrap:anywhere}.scan-next{margin:16px 0 0;color:#667085;text-align:center;font-size:.76rem;min-height:1.15em}.scan-result .scan-primary{width:100%;margin-top:10px}.scan-live{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+        .scan-result-backdrop{position:fixed;z-index:50;inset:0;display:flex;align-items:flex-end;justify-content:center;background:rgba(2,6,13,.76);backdrop-filter:blur(7px);padding:18px 14px calc(18px + var(--scan-safe-bottom))}.scan-result{width:min(100%,520px);max-height:calc(100svh - 36px - var(--scan-safe-top) - var(--scan-safe-bottom));overflow:auto;border:1px solid var(--scan-border);border-radius:26px;background:#f8fafc;color:#101828;padding:24px;box-shadow:0 30px 90px rgba(0,0,0,.55);animation:scan-rise .18s ease-out}.scan-result-mark{display:grid;place-items:center;width:62px;height:62px;border-radius:50%;margin-bottom:17px;background:#dcfae6;color:#067647;font-size:2rem;font-weight:900}.scan-result.is-error .scan-result-mark{background:#fee4e2;color:#b42318}.scan-result.is-warning .scan-result-mark{background:#fef0c7;color:#b54708}.scan-result.is-info .scan-result-mark{background:#e6efff;color:#175cd3}.scan-result.is-busy .scan-result-mark{background:#eef2f6;color:#475467}.scan-result-kicker{margin:0 0 4px;color:#667085;font-size:.68rem;font-weight:850;letter-spacing:.13em;text-transform:uppercase}.scan-result h2{margin:0;font-size:clamp(1.75rem,8vw,2.25rem);line-height:1.08;letter-spacing:-.035em}.scan-result-message{margin:8px 0 0;color:#667085}.scan-person{margin-top:20px;border:1px solid #d0d5dd;border-radius:15px;background:#fff;padding:16px}.scan-person strong{display:block;font-size:1.25rem}.scan-person span{display:block;margin-top:3px;color:#667085}.scan-result-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 0}.scan-result-meta div{border-radius:12px;background:#eef2f6;padding:11px}.scan-result-meta small{display:block;color:#667085;font-size:.65rem;font-weight:800;text-transform:uppercase}.scan-result-meta b{display:block;margin-top:3px;font-size:.8rem;overflow-wrap:anywhere}.scan-admission-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}.scan-admission-stats div{min-width:0;border:1px solid #d0d5dd;border-radius:12px;background:#fff;padding:10px}.scan-admission-stats small{display:block;color:#667085;font-size:.6rem;font-weight:800;line-height:1.2;text-transform:uppercase}.scan-admission-stats b{display:block;margin-top:4px;font-size:1rem}.scan-confirm-note{margin:16px 0 0;border:1px solid #fedf89;border-radius:13px;background:#fffaeb;padding:12px;color:#7a2e0e;font-size:.8rem;font-weight:650}.scan-next{margin:16px 0 0;color:#667085;text-align:center;font-size:.76rem;min-height:1.15em}.scan-actions{display:grid;gap:9px;margin-top:16px}.scan-actions.is-split{grid-template-columns:1fr 1fr}.scan-actions .scan-primary,.scan-actions .scan-secondary{width:100%;margin:0}.scan-danger{display:inline-flex;align-items:center;justify-content:center;min-height:50px;border:1px solid #d92d20;border-radius:12px;background:#d92d20;color:#fff;padding:12px 18px;font-weight:800;cursor:pointer;touch-action:manipulation}.scan-danger:disabled,.scan-secondary:disabled{opacity:.48;cursor:wait}.scan-live{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
         @@keyframes scan-rise{from{transform:translateY(18px);opacity:.4}to{transform:none;opacity:1}}
         @@media(min-width:700px){.scan-app{padding-left:24px;padding-right:24px}.scan-camera{min-height:min(66svh,650px)}.scan-camera .wrapper,.scan-camera .qrcode-stream-wrapper,.scan-camera video,.scan-camera canvas{min-height:min(66svh,650px)}.scan-result-backdrop{align-items:center}.scan-footer{padding-top:20px}}
-        @@media(max-width:360px){.scan-app{padding-left:10px;padding-right:10px}.scan-camera{border-radius:19px}.scan-target{width:220px}.scan-manual-row{grid-template-columns:1fr}.scan-result{padding:20px}.scan-result-meta{grid-template-columns:1fr}}
+        @@media(max-width:360px){.scan-app{padding-left:10px;padding-right:10px}.scan-camera{border-radius:19px}.scan-target{width:220px}.scan-manual-row{grid-template-columns:1fr}.scan-result{padding:20px}.scan-result-meta{grid-template-columns:1fr}.scan-admission-stats{grid-template-columns:1fr 1fr}.scan-actions.is-split{grid-template-columns:1fr}}
         @@media(prefers-reduced-motion:reduce){.scan-result{animation:none}}
     </style>
 </head>
@@ -86,19 +87,58 @@
     </main>
     </div>
 
-    <div class="scan-result-backdrop" v-if="resultOpen" v-on:click.self="closeResult" v-on:keydown.esc.prevent="closeResult">
+    <div class="scan-result-backdrop" v-if="resultOpen" v-on:click.self="requestClose" v-on:keydown.esc.prevent="requestClose">
         <section class="scan-result" :class="resultClass" role="dialog" aria-modal="true" aria-labelledby="scan-result-title" aria-describedby="scan-result-message">
             <div class="scan-result-mark" aria-hidden="true">{{ resultIcon }}</div>
             <p class="scan-result-kicker">{{ resultKicker }}</p>
             <h2 id="scan-result-title">{{ resultTitle }}</h2>
-            <p class="scan-result-message" id="scan-result-message">{{ result.message }}</p>
+            <p class="scan-result-message" id="scan-result-message">{{ resultMessage }}</p>
             <div class="scan-person" v-if="result.attendee"><strong>{{ result.attendee }}</strong><span>{{ result.ticketType || 'Event ticket' }}</span></div>
-            <div class="scan-result-meta" v-if="result.checkedInAt || gate">
-                <div v-if="result.checkedInAt"><small>{{ result.status === 'duplicate' ? 'Originally checked in' : 'Checked in' }}</small><b>{{ formatTime(result.checkedInAt) }}</b></div>
-                <div v-if="gate"><small>Gate / lane</small><b>{{ gate }}</b></div>
+            <div class="scan-result-meta" v-if="hasTicketDetails">
+                <div><small>Current state</small><b>{{ result.isInside ? 'Inside' : 'Outside' }}</b></div>
+                <div v-if="result.checkedInAt"><small>Last check-in</small><b>{{ formatTime(result.checkedInAt) }}</b></div>
+                <div v-if="result.checkedOutAt"><small>Last check-out</small><b>{{ formatTime(result.checkedOutAt) }}</b></div>
+                <div v-if="result.lastGate"><small>Last gate / lane</small><b>{{ result.lastGate }}</b></div>
             </div>
-            <p class="scan-next" aria-live="polite">{{ countdownText }}</p>
-            <button ref="closeResult" class="scan-primary" type="button" v-on:click="fatal ? exitScanner() : closeResult">{{ fatal ? 'Exit scanner' : 'Close · scan next' }}</button>
+            <div class="scan-admission-stats" v-if="hasTicketDetails">
+                <div><small>Entrances</small><b>{{ result.entranceCount || 0 }}</b></div>
+                <div><small>ID confirmed</small><b>{{ result.idConfirmedCount || 0 }}</b></div>
+                <div><small>ID rejected</small><b>{{ result.idRejectedCount || 0 }}</b></div>
+            </div>
+
+            <p class="scan-confirm-note" v-if="phase === 'confirm_checkout'">Confirm that {{ result.attendee || 'this ticket holder' }} is exiting. The ticket will be marked outside and can be checked in again later.</p>
+            <p class="scan-confirm-note" v-if="phase === 'confirm_id_reject'">Record that the photo ID did not match. The holder will not be admitted, and this rejected ID check will be counted.</p>
+
+            <div class="scan-actions" v-if="phase === 'lookup'">
+                <button data-autofocus class="scan-secondary" type="button" v-on:click="closeResult">Cancel lookup</button>
+            </div>
+            <div class="scan-actions" v-else-if="phase === 'decision' && result.isInside">
+                <button data-autofocus class="scan-primary" type="button" :disabled="busy" v-on:click="beginCheckout">Check out</button>
+                <button class="scan-secondary" type="button" :disabled="busy" v-on:click="closeResult">Cancel · scan next</button>
+            </div>
+            <div class="scan-actions" v-else-if="phase === 'decision' && result.requireIdCheck">
+                <button data-autofocus class="scan-primary" type="button" :disabled="busy" v-on:click="submitAction('check_in', true)">ID matches · check in</button>
+                <button class="scan-secondary" type="button" :disabled="busy" v-on:click="beginIdRejection">ID does not match</button>
+                <button class="scan-secondary" type="button" :disabled="busy" v-on:click="closeResult">Cancel · scan next</button>
+            </div>
+            <div class="scan-actions" v-else-if="phase === 'decision'">
+                <button data-autofocus class="scan-primary" type="button" :disabled="busy" v-on:click="submitAction('check_in', null)">Check in</button>
+                <button class="scan-secondary" type="button" :disabled="busy" v-on:click="closeResult">Cancel · scan next</button>
+            </div>
+            <div class="scan-actions is-split" v-else-if="phase === 'confirm_checkout'">
+                <button class="scan-secondary" type="button" :disabled="busy" v-on:click="returnToDecision">Back</button>
+                <button data-autofocus class="scan-primary" type="button" :disabled="busy" v-on:click="submitAction('check_out', null)">{{ busy ? 'Checking out…' : 'Confirm check-out' }}</button>
+            </div>
+            <div class="scan-actions is-split" v-else-if="phase === 'confirm_id_reject'">
+                <button class="scan-secondary" type="button" :disabled="busy" v-on:click="returnToDecision">Back</button>
+                <button data-autofocus class="scan-danger" type="button" :disabled="busy" v-on:click="submitAction('check_in', false)">{{ busy ? 'Recording…' : 'Reject ID check' }}</button>
+            </div>
+            <template v-else-if="phase === 'terminal'">
+                <p class="scan-next" aria-live="polite">{{ countdownText }}</p>
+                <div class="scan-actions">
+                    <button ref="closeResult" data-autofocus class="scan-primary" type="button" v-on:click="fatal ? exitScanner() : closeResult">{{ fatal ? 'Exit scanner' : 'Close · scan next' }}</button>
+                </div>
+            </template>
         </section>
     </div>
     <div class="scan-live" aria-live="assertive">{{ liveAnnouncement }}</div>
@@ -113,13 +153,50 @@
     const gateStorageKey = `makepay:event-scanner:${config.eventKey}:gate`;
     new Vue({
         el:'#event-scanner',
-        data(){return{online:navigator.onLine,cameraMounted:true,cameraMode:'auto',cameraError:'',captureFallback:false,busy:false,resultOpen:false,fatal:false,result:{},manualCode:'',gate:'',autoCloseTimer:null,countdownTimer:null,remainingSeconds:0,liveAnnouncement:''}},
+        data(){return{online:navigator.onLine,cameraMounted:true,cameraMode:'auto',cameraError:'',captureFallback:false,busy:false,resultOpen:false,fatal:false,phase:'idle',result:{},activeCode:'',activeManual:false,requestSequence:0,manualCode:'',gate:'',autoCloseTimer:null,countdownTimer:null,remainingSeconds:0,liveAnnouncement:''}},
         computed:{
-            resultClass(){return this.result.success?'is-success':this.result.status==='duplicate'?'is-warning':'is-error'},
-            resultIcon(){return this.result.success?'✓':this.result.status==='duplicate'?'!':'×'},
-            resultKicker(){return this.result.success?'Check-in complete':this.result.status==='duplicate'?'Attention':'Ticket rejected'},
-            resultTitle(){return{checked_in:'Valid ticket',duplicate:'Already checked in',wrong_event:'Wrong event',revoked:'Ticket revoked',unauthorized:'Scanner access expired',missing:'Enter a ticket code',network_error:'Connection problem'}[this.result.status]||'Ticket not valid'},
-            countdownText(){return this.fatal?'Reopen this event’s protected scanner link to continue.':this.remainingSeconds>0?`Ready for next scan in ${this.remainingSeconds}s`:config.autoCloseSeconds===0&&this.resultOpen?'Close when you are ready to scan the next ticket.':''}
+            hasTicketDetails(){return Boolean(this.result.ticketId||this.result.attendee||this.result.ticketType)},
+            resultClass(){
+                if(this.phase==='lookup')return'is-busy';
+                if(this.phase==='decision')return'is-info';
+                if(this.phase==='confirm_checkout'||this.phase==='confirm_id_reject')return'is-warning';
+                if(this.result.success)return'is-success';
+                return['id_rejected','already_inside','already_outside','not_checked_in','duplicate'].includes(this.result.status)?'is-warning':'is-error';
+            },
+            resultIcon(){
+                if(this.phase==='lookup')return'…';
+                if(this.phase==='confirm_checkout'||this.phase==='confirm_id_reject')return'!';
+                if(this.phase==='decision')return this.result.isInside?'↔':'✓';
+                if(this.result.success)return'✓';
+                return['id_rejected','already_inside','already_outside','not_checked_in','duplicate'].includes(this.result.status)?'!':'×';
+            },
+            resultKicker(){
+                if(this.phase==='lookup')return'Ticket lookup';
+                if(this.phase==='confirm_checkout')return'Confirm exit';
+                if(this.phase==='confirm_id_reject')return'Confirm ID rejection';
+                if(this.phase==='decision')return this.result.isInside?'Currently admitted':this.result.requireIdCheck?'Photo ID required':'Ready to admit';
+                if(this.result.status==='checked_in')return'Admission recorded';
+                if(this.result.status==='checked_out')return'Exit recorded';
+                if(this.result.status==='id_rejected')return'Admission denied';
+                return this.result.success?'Ticket updated':['already_inside','already_outside','not_checked_in','duplicate'].includes(this.result.status)?'Attention':'Ticket rejected';
+            },
+            resultTitle(){
+                if(this.phase==='lookup')return'Checking ticket…';
+                if(this.phase==='confirm_checkout')return'Check this holder out?';
+                if(this.phase==='confirm_id_reject')return'ID does not match?';
+                if(this.phase==='decision')return this.result.isInside?'Ticket holder is inside':'Valid ticket';
+                return{checked_in:'Checked in',checked_out:'Checked out',id_rejected:'ID check rejected',already_inside:'Already inside',already_outside:'Already outside',not_checked_in:'Already outside',duplicate:'Already checked in',wrong_event:'Wrong event',revoked:'Ticket revoked',not_found:'Ticket not found',unauthorized:'Scanner access expired',missing:'Enter a ticket code',invalid:'Scanner input invalid',invalid_action:'Action not available',network_error:'Connection problem'}[this.result.status]||'Ticket not valid';
+            },
+            resultMessage(){
+                if(this.phase==='lookup')return'Looking up this ticket without changing its admission state.';
+                if(this.phase==='confirm_checkout')return'This action records an exit and makes the ticket eligible for a later re-entry.';
+                if(this.phase==='confirm_id_reject')return'This action records a rejected ID check and does not admit the ticket holder.';
+                if(this.phase==='decision'&&this.result.isInside)return this.result.message||'This ticket is currently admitted. Check it out only when the holder is leaving.';
+                if(this.phase==='decision'&&this.result.requireIdCheck)return this.result.message||'Compare the attendee’s photo ID with the name shown below before choosing an action.';
+                if(this.phase==='decision')return this.result.message||'Review the ticket holder, then confirm check-in.';
+                return this.result.message||'';
+            },
+            countdownText(){return this.fatal?'Reopen this event’s protected scanner link to continue.':this.phase==='terminal'&&this.remainingSeconds>0?`Ready for next scan in ${this.remainingSeconds}s`:this.phase==='terminal'&&config.autoCloseSeconds===0&&this.resultOpen?'Close when you are ready to scan the next ticket.':''}
         },
         mounted(){
             try{this.gate=localStorage.getItem(gateStorageKey)||''}catch{}
@@ -132,39 +209,85 @@
             stopCamera(){this.cameraMode='off';this.cameraMounted=false},
             resumeCamera(){if(this.fatal||document.hidden)return;this.cameraError='';this.captureFallback=false;this.cameraMode='off';this.cameraMounted=false;this.$nextTick(()=>{this.cameraMounted=true;this.cameraMode='auto'})},
             onVisibilityChange(){if(document.hidden)this.stopCamera();else if(!this.resultOpen)this.resumeCamera()},
-            onKeyDown(event){if(event.key==='Escape'&&this.resultOpen){event.preventDefault();this.closeResult()}},
+            onKeyDown(event){if(event.key==='Escape'&&this.resultOpen){event.preventDefault();this.requestClose()}},
             async onCameraInit(promise){
                 try{await promise;this.cameraError='';this.captureFallback=false}
                 catch(error){this.cameraMode='off';this.captureFallback=true;this.cameraError={NotAllowedError:'Allow camera access in your browser settings, then try again.',NotFoundError:'No camera was found on this device.',NotSupportedError:'Camera scanning requires a secure HTTPS connection.',NotReadableError:'The camera is already in use by another app.',OverconstrainedError:'The rear camera could not be selected.',StreamApiNotSupportedError:'Live camera scanning is not supported by this browser.'}[error?.name]||'The camera could not be started. Use manual entry or scan a saved ticket image below.'}
             },
             retryCamera(){this.resumeCamera()},
-            onDecode(value){const code=typeof value==='string'?value.trim():'';if(!code||this.busy||this.resultOpen)return;this.checkCode(code,false)},
-            submitManual(){const code=this.manualCode.trim();if(!code||this.busy||this.resultOpen)return;this.checkCode(code,true)},
-            async checkCode(code,manual){
+            onDecode(value){const code=typeof value==='string'?value.trim():'';if(!code||this.busy||this.resultOpen)return;this.lookupCode(code,false)},
+            submitManual(){const code=this.manualCode.trim();if(!code||this.busy||this.resultOpen)return;this.lookupCode(code,true)},
+            async lookupCode(code,manual){
                 this.stopCamera();
-                if(!this.online){this.showResult({success:false,status:'network_error',message:'This device is offline. Reconnect and try again.'});return}
-                this.busy=true;
+                this.activeCode=code;this.activeManual=manual;this.busy=true;
+                const requestId=++this.requestSequence;
+                this.openResult({success:false,status:'lookup',message:''},'lookup');
+                if(!this.online){this.busy=false;this.showTerminal({success:false,status:'network_error',message:'This device is offline. Reconnect and try again.'});return}
                 try{
-                    const response=await fetch(config.checkInUrl,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','RequestVerificationToken':token,'X-MakePay-Scanner':'1'},body:JSON.stringify({code,gate:this.gate||null})});
-                    const result=await response.json().catch(()=>({success:false,status:'network_error',message:'The scanner received an unexpected response.'}));
-                    if(manual&&result.success)this.manualCode='';
-                    this.showResult(result);
-                }catch{this.showResult({success:false,status:'network_error',message:'Could not reach the server. Keep the ticket nearby and try again.'})}
-                finally{this.busy=false}
+                    const response=await fetch(config.lookupUrl,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','RequestVerificationToken':token,'X-MakePay-Scanner':'1'},body:JSON.stringify({code})});
+                    const fallback=response.status===401||response.status===403?{success:false,status:'unauthorized',message:'This protected scanner session has expired.'}:{success:false,status:'network_error',message:'The scanner received an unexpected response.'};
+                    const result=await response.json().catch(()=>fallback);
+                    if(requestId!==this.requestSequence)return;
+                    this.busy=false;
+                    if(this.canDecide(result))this.showDecision(result);
+                    else this.showTerminal(result);
+                }catch{
+                    if(requestId!==this.requestSequence)return;
+                    this.busy=false;this.showTerminal({success:false,status:'network_error',message:'Could not reach the server. Keep the ticket nearby and try again.'});
+                }
             },
-            showResult(result){
-                this.clearResultTimers();this.stopCamera();this.result=result||{success:false,status:'not_found',message:'Ticket not found for this event.'};this.fatal=this.result.status==='unauthorized';this.resultOpen=true;this.liveAnnouncement=`${this.resultTitle}. ${this.result.message||''}`;
-                this.$refs.scanShell?.setAttribute('inert','');this.$refs.scanShell?.setAttribute('aria-hidden','true');
+            canDecide(result){return Boolean(result&&result.ticketId&&!['not_found','wrong_event','revoked','unauthorized','missing','network_error'].includes(result.status))},
+            openResult(result,phase){
+                this.clearResultTimers();this.stopCamera();this.result=result||{};this.phase=phase;this.fatal=this.result.status==='unauthorized';
+                if(!this.resultOpen){this.resultOpen=true;this.$refs.scanShell?.setAttribute('inert','');this.$refs.scanShell?.setAttribute('aria-hidden','true')}
+                this.liveAnnouncement=`${this.resultTitle}. ${this.resultMessage}`;
+                this.focusResultAction();
+            },
+            showDecision(result){this.openResult(result,'decision')},
+            showTerminal(result){
+                this.openResult(result||{success:false,status:'not_found',message:'Ticket not found for this event.'},'terminal');
+                if(this.activeManual&&['checked_in','checked_out','id_rejected'].includes(this.result.status))this.manualCode='';
+                this.activeCode='';this.activeManual=false;
                 if(navigator.vibrate)navigator.vibrate(this.result.success?[120]:[80,60,80]);
-                this.$nextTick(()=>this.$refs.closeResult?.focus());
                 if(!this.fatal&&config.autoCloseSeconds>0){
                     this.remainingSeconds=config.autoCloseSeconds;
                     this.countdownTimer=setInterval(()=>{this.remainingSeconds=Math.max(0,this.remainingSeconds-1)},1000);
                     this.autoCloseTimer=setTimeout(()=>this.closeResult(),config.autoCloseSeconds*1000);
                 }
             },
+            beginCheckout(){if(this.busy)return;this.phase='confirm_checkout';this.liveAnnouncement='Confirm check-out. This records that the ticket holder is exiting and may re-enter later.';this.focusResultAction()},
+            beginIdRejection(){if(this.busy)return;this.phase='confirm_id_reject';this.liveAnnouncement='Confirm rejected ID check. The ticket holder will not be admitted.';this.focusResultAction()},
+            returnToDecision(){if(this.busy)return;this.phase='decision';this.liveAnnouncement=`${this.resultTitle}. ${this.resultMessage}`;this.focusResultAction()},
+            async submitAction(action,idConfirmed){
+                if(this.busy||!this.activeCode)return;
+                this.busy=true;
+                const requestId=++this.requestSequence;
+                const operationId=globalThis.crypto?.randomUUID?.()||`${Date.now()}-${Math.random().toString(36).slice(2)}`;
+                try{
+                    const response=await fetch(config.actionUrl,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','RequestVerificationToken':token,'X-MakePay-Scanner':'1'},body:JSON.stringify({code:this.activeCode,gate:this.gate||null,action,idConfirmed,operationId})});
+                    const fallback=response.status===401||response.status===403?{success:false,status:'unauthorized',message:'This protected scanner session has expired.'}:{success:false,status:'network_error',message:'The scanner received an unexpected response.'};
+                    const result=await response.json().catch(()=>fallback);
+                    if(requestId!==this.requestSequence)return;
+                    this.busy=false;
+                    if(result.status==='id_check_required'&&this.canDecide(result))this.showDecision(result);
+                    else this.showTerminal(result);
+                }catch{
+                    if(requestId!==this.requestSequence)return;
+                    this.busy=false;this.showTerminal({success:false,status:'network_error',message:'Could not reach the server. The admission state may have changed; scan the ticket again to verify it.'});
+                }
+            },
+            focusResultAction(){this.$nextTick(()=>this.$el.querySelector('.scan-result [data-autofocus]')?.focus())},
             clearResultTimers(){if(this.autoCloseTimer)clearTimeout(this.autoCloseTimer);if(this.countdownTimer)clearInterval(this.countdownTimer);this.autoCloseTimer=null;this.countdownTimer=null;this.remainingSeconds=0},
-            closeResult(){if(this.fatal)return;this.clearResultTimers();this.resultOpen=false;this.result={};this.$refs.scanShell?.removeAttribute('inert');this.$refs.scanShell?.removeAttribute('aria-hidden');this.liveAnnouncement='Ready for the next ticket.';this.resumeCamera();this.$nextTick(()=>this.$refs.scannerMain?.focus({preventScroll:true}))},
+            requestClose(){
+                if(this.busy)return;
+                if(this.phase==='confirm_checkout'||this.phase==='confirm_id_reject'){this.returnToDecision();return}
+                this.closeResult();
+            },
+            closeResult(){
+                if(this.fatal||this.busy&&this.phase!=='lookup')return;
+                if(this.phase==='lookup'){this.requestSequence++;this.busy=false}
+                this.clearResultTimers();this.resultOpen=false;this.result={};this.phase='idle';this.activeCode='';this.activeManual=false;this.$refs.scanShell?.removeAttribute('inert');this.$refs.scanShell?.removeAttribute('aria-hidden');this.liveAnnouncement='Ready for the next ticket.';this.resumeCamera();this.$nextTick(()=>this.$refs.scannerMain?.focus({preventScroll:true}));
+            },
             exitScanner(){window.location.assign(config.eventUrl)},
             formatTime(value){const date=new Date(value);return Number.isNaN(date.getTime())?'':date.toLocaleString([], {dateStyle:'medium',timeStyle:'short'})}
         }

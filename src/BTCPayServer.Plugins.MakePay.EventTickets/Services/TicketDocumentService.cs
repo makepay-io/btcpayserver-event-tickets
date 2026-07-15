@@ -72,7 +72,7 @@ public sealed class TicketDocumentService(TicketCodeService codes)
             FillRect(content, soft, 42, 145, 528, 42);
             AddWrappedText(content, "F2", 11, 54, 163, text, pdfTicket.Code, 66, 14, 2);
             AddText(content, "F1", 9, 44, 104, muted, $"Order {order.Id}");
-            AddText(content, "F1", 9, 44, 84, muted, "Keep this ticket private. The QR code is valid for one admission.");
+            AddText(content, "F1", 9, 44, 84, muted, "Keep this ticket private. Event staff scan it to record entry and exit.");
             AddText(content, "F2", 9, 44, 48, accent, "CREATED WITH MAKEPAY.IO + BTCPAY SERVER");
             objects.Add(StreamObject("<< /Length {0} >>", Encoding.ASCII.GetBytes(content.ToString())));
             objects.Add(Ascii($"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> /XObject << /{qrName} {imageId} 0 R >> >> /Contents {contentId} 0 R >>"));

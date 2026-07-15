@@ -111,38 +111,241 @@ public sealed class EventTicketRepository(StoreRepository stores, TicketCodeServ
     public async Task<IssuedTicket?> GetTicket(string storeId, string id) => (await stores.GetSettingAsync<IssuedTicketCollection>(storeId, EventTicketsPlugin.TicketsKey) ?? new()).Tickets.GetValueOrDefault(id);
     public async Task<IssuedTicket?> FindTicketByCodeHash(string storeId, string hash) => (await GetTickets(storeId)).FirstOrDefault(t => t.CodeHash == hash);
     public async Task SaveTickets(string storeId, IEnumerable<IssuedTicket> tickets) => await Mutate<IssuedTicketCollection>(storeId, EventTicketsPlugin.TicketsKey, value => { foreach (var ticket in tickets) value.Tickets[ticket.Id] = ticket; });
-    public async Task<CheckInResult> CheckIn(string storeId, TicketEvent item, string rawCode, string user, string? gate)
+    public static bool IsCurrentlyInside(IssuedTicket ticket) =>
+        ticket.CheckedInAt is not null &&
+        (ticket.CheckedOutAt is null || ticket.CheckedInAt > ticket.CheckedOutAt);
+
+    public static long EffectiveEntranceCount(IssuedTicket ticket) =>
+        Math.Max(ticket.EntranceCount, ticket.CheckedInAt is null ? 0L : 1L);
+
+    public async Task<CheckInResult> LookupTicket(string storeId, TicketEvent item, string rawCode)
     {
-        CheckInResult result = new(false, "not_found", null, null, null, null, "Ticket not found for this event.");
+        var tickets = new IssuedTicketCollection();
+        foreach (var ticket in await GetTickets(storeId)) tickets.Tickets[ticket.Id] = ticket;
+        return ApplyLookup(tickets, item, rawCode);
+    }
+
+    public static CheckInResult ApplyLookup(IssuedTicketCollection value, TicketEvent item, string rawCode)
+    {
+        var resolved = ResolveTicket(value, item, rawCode);
+        if (resolved.Error is not null) return resolved.Error;
+        var ticket = resolved.Ticket!;
+        var inside = IsCurrentlyInside(ticket);
+        return Result(ticket, item, resolved.TicketType!, true, inside ? "inside" : "ready_check_in",
+            inside ? "Ticket holder is currently inside." : "Ticket is valid and ready to check in.");
+    }
+
+    public async Task<CheckInResult> CheckIn(
+        string storeId,
+        TicketEvent item,
+        string rawCode,
+        string user,
+        string? gate,
+        bool? idCheckConfirmed = null,
+        string? operationId = null)
+    {
+        CheckInResult result = NotFound();
         await MutateIfChanged<IssuedTicketCollection>(storeId, EventTicketsPlugin.TicketsKey, value =>
         {
-            result = ApplyCheckIn(value, item, rawCode, user, gate);
-            return result.Success;
+            result = ApplyCheckIn(value, item, rawCode, user, gate, idCheckConfirmed, operationId, out var changed);
+            return changed;
         });
         return result;
     }
-    public static CheckInResult ApplyCheckIn(IssuedTicketCollection value, TicketEvent item, string rawCode, string user, string? gate, DateTimeOffset? now = null)
+
+    public async Task<CheckInResult> CheckOut(
+        string storeId,
+        TicketEvent item,
+        string rawCode,
+        string user,
+        string? gate,
+        string? operationId = null)
+    {
+        CheckInResult result = NotFound();
+        await MutateIfChanged<IssuedTicketCollection>(storeId, EventTicketsPlugin.TicketsKey, value =>
+        {
+            result = ApplyCheckOut(value, item, rawCode, user, gate, operationId, out var changed);
+            return changed;
+        });
+        return result;
+    }
+
+    public async Task<CheckInResult> ApplyScannerAction(
+        string storeId,
+        TicketEvent item,
+        ScannerActionRequest request,
+        string user)
+    {
+        var action = request.Action?.Trim().ToLowerInvariant();
+        return action switch
+        {
+            "check_in" => await CheckIn(storeId, item, request.Code, user, request.Gate,
+                request.IdConfirmed, request.OperationId),
+            "check_out" => await CheckOut(storeId, item, request.Code, user, request.Gate,
+                request.OperationId),
+            "reject_id" when item.RequireIdCheck => await CheckIn(storeId, item, request.Code, user,
+                request.Gate, false, request.OperationId),
+            _ => new CheckInResult(false, "invalid_action", null, null, null, null,
+                "Choose check in or check out.")
+        };
+    }
+
+    // Compatibility overload used by older integrations and existing tests.
+    public static CheckInResult ApplyCheckIn(
+        IssuedTicketCollection value,
+        TicketEvent item,
+        string rawCode,
+        string user,
+        string? gate,
+        DateTimeOffset? now = null) =>
+        ApplyCheckIn(value, item, rawCode, user, gate, null, null, out _, now);
+
+    public static CheckInResult ApplyCheckIn(
+        IssuedTicketCollection value,
+        TicketEvent item,
+        string rawCode,
+        string user,
+        string? gate,
+        bool? idCheckConfirmed,
+        string? operationId,
+        out bool changed,
+        DateTimeOffset? now = null)
+    {
+        changed = false;
+        var resolved = ResolveTicket(value, item, rawCode);
+        if (resolved.Error is not null) return resolved.Error;
+        var ticket = resolved.Ticket!;
+        var ticketType = resolved.TicketType!;
+
+        if (IsCurrentlyInside(ticket))
+            return Result(ticket, item, ticketType, false, "duplicate", "Ticket holder is already checked in.");
+
+        var timestamp = now ?? DateTimeOffset.UtcNow;
+        var normalizedOperationId = NormalizeOperationId(operationId);
+        if (item.RequireIdCheck)
+        {
+            if (idCheckConfirmed is null)
+                return Result(ticket, item, ticketType, false, "id_check_required",
+                    "Confirm the attendee ID before checking in.");
+
+            if (idCheckConfirmed == false)
+            {
+                // A retried browser request must not inflate the rejection audit counter.
+                if (normalizedOperationId is not null &&
+                    normalizedOperationId.Equals(ticket.LastScannerOperationId, StringComparison.Ordinal))
+                    return Result(ticket, item, ticketType, false, "id_rejected",
+                        "ID check rejected. Ticket holder remains outside.");
+
+                ticket.IdRejectedCount++;
+                ticket.LastIdCheckedAt = timestamp;
+                ticket.LastIdCheckedBy = user;
+                ticket.LastIdCheckConfirmed = false;
+                ticket.LastScannerOperationId = normalizedOperationId;
+                changed = true;
+                return Result(ticket, item, ticketType, false, "id_rejected",
+                    "ID check rejected. Ticket holder remains outside.");
+            }
+
+            ticket.IdConfirmedCount++;
+            ticket.LastIdCheckedAt = timestamp;
+            ticket.LastIdCheckedBy = user;
+            ticket.LastIdCheckConfirmed = true;
+        }
+
+        ticket.EntranceCount = EffectiveEntranceCount(ticket) + 1;
+        ticket.CheckedInAt = timestamp;
+        ticket.CheckedInBy = user;
+        ticket.CheckInGate = NormalizeGate(gate);
+        ticket.LastScannerOperationId = normalizedOperationId;
+        changed = true;
+        return Result(ticket, item, ticketType, true, "checked_in", "Welcome — ticket checked in.");
+    }
+
+    public static CheckInResult ApplyCheckOut(
+        IssuedTicketCollection value,
+        TicketEvent item,
+        string rawCode,
+        string user,
+        string? gate,
+        DateTimeOffset? now = null) =>
+        ApplyCheckOut(value, item, rawCode, user, gate, null, out _, now);
+
+    public static CheckInResult ApplyCheckOut(
+        IssuedTicketCollection value,
+        TicketEvent item,
+        string rawCode,
+        string user,
+        string? gate,
+        string? operationId,
+        out bool changed,
+        DateTimeOffset? now = null)
+    {
+        changed = false;
+        var resolved = ResolveTicket(value, item, rawCode);
+        if (resolved.Error is not null) return resolved.Error;
+        var ticket = resolved.Ticket!;
+        var ticketType = resolved.TicketType!;
+        if (!IsCurrentlyInside(ticket))
+            return Result(ticket, item, ticketType, false, "not_checked_in",
+                "Ticket holder is already outside.");
+
+        ticket.EntranceCount = EffectiveEntranceCount(ticket);
+        ticket.CheckedOutAt = now ?? DateTimeOffset.UtcNow;
+        ticket.CheckedOutBy = user;
+        ticket.CheckOutGate = NormalizeGate(gate);
+        ticket.LastScannerOperationId = NormalizeOperationId(operationId);
+        changed = true;
+        return Result(ticket, item, ticketType, true, "checked_out",
+            "Ticket holder checked out and can be admitted again later.");
+    }
+
+    private static (IssuedTicket? Ticket, string? TicketType, CheckInResult? Error) ResolveTicket(
+        IssuedTicketCollection value,
+        TicketEvent item,
+        string rawCode)
     {
         var hash = TicketCodeService.Hash(TicketCodeService.ExtractCode(rawCode));
         var ticket = value.Tickets.Values.FirstOrDefault(candidate => candidate.CodeHash == hash);
-        if (ticket is null)
-            return new(false, "not_found", null, null, null, null, "Ticket not found for this event.");
+        if (ticket is null) return (null, null, NotFound());
         if (!ticket.EventId.Equals(item.Id, StringComparison.OrdinalIgnoreCase))
-            return new(false, "wrong_event", null, null, null, null, "This ticket belongs to another event.");
+            return (null, null, new CheckInResult(false, "wrong_event", null, null, null, null,
+                "This ticket belongs to another event."));
 
-        var ticketType = item.TicketTypes.FirstOrDefault(type => type.Id.Equals(ticket.TicketTypeId, StringComparison.OrdinalIgnoreCase))?.Name ?? "Event ticket";
+        var ticketType = item.TicketTypes.FirstOrDefault(type =>
+            type.Id.Equals(ticket.TicketTypeId, StringComparison.OrdinalIgnoreCase))?.Name ?? "Event ticket";
         if (ticket.Revoked)
-            return new(false, "revoked", ticket.Id, ticket.AttendeeName, ticketType, ticket.CheckedInAt, "Ticket is revoked.");
-        if (ticket.CheckedInAt is not null)
-            return new(false, "duplicate", ticket.Id, ticket.AttendeeName, ticketType, ticket.CheckedInAt, "Ticket was already checked in.");
+            return (ticket, ticketType, Result(ticket, item, ticketType, false, "revoked", "Ticket is revoked."));
+        return (ticket, ticketType, null);
+    }
 
-        ticket.CheckedInAt = now ?? DateTimeOffset.UtcNow;
-        ticket.CheckedInBy = user;
-        var checkInGate = gate?.Trim();
-        ticket.CheckInGate = string.IsNullOrEmpty(checkInGate)
-            ? null
-            : checkInGate[..Math.Min(80, checkInGate.Length)];
-        return new(true, "checked_in", ticket.Id, ticket.AttendeeName, ticketType, ticket.CheckedInAt, "Welcome — ticket checked in.");
+    private static CheckInResult Result(
+        IssuedTicket ticket,
+        TicketEvent item,
+        string ticketType,
+        bool success,
+        string status,
+        string message)
+    {
+        var inside = IsCurrentlyInside(ticket);
+        return new CheckInResult(success, status, ticket.Id, ticket.AttendeeName, ticketType,
+            ticket.CheckedInAt, message, ticket.CheckedOutAt, inside, item.RequireIdCheck,
+            EffectiveEntranceCount(ticket), ticket.IdConfirmedCount, ticket.IdRejectedCount,
+            inside ? ticket.CheckInGate : ticket.CheckOutGate);
+    }
+
+    private static CheckInResult NotFound() =>
+        new(false, "not_found", null, null, null, null, "Ticket not found for this event.");
+
+    private static string? NormalizeGate(string? gate)
+    {
+        var normalized = gate?.Trim();
+        return string.IsNullOrEmpty(normalized) ? null : normalized[..Math.Min(80, normalized.Length)];
+    }
+
+    private static string? NormalizeOperationId(string? operationId)
+    {
+        var normalized = operationId?.Trim();
+        return string.IsNullOrEmpty(normalized) ? null : normalized[..Math.Min(100, normalized.Length)];
     }
     public async Task<Dictionary<string, int?>> GetRemaining(string storeId, TicketEvent item)
     {

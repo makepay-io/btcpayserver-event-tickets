@@ -64,6 +64,41 @@ final result: passed
 
 ---
 
+# Design QA — admission state and scanner sharing v1.6.0
+
+## Scope
+
+- Per-event public scanner lookup, check-in, confirmed check-out, and re-entry states.
+- Optional event-level staff confirmation of photo ID.
+- Per-ticket entrance and ID-decision counters in the Event Tickets dashboard.
+- Dashboard scanner-share dialog with QR, copy, open, and protected-link rotation.
+
+## Interaction contract
+
+- Reading a camera, uploaded image, or manually entered code performs lookup only; a scan never changes attendance state by itself.
+- An outside holder has an explicit **Check in** action. When the event requires ID, staff must choose either **ID matches · Check in** or **ID does not match** before any attendance mutation.
+- An inside holder has an explicit **Check out** action followed by a confirmation that the holder is exiting and can be admitted again later.
+- Only terminal results use the configured automatic close timer. Lookup decisions and destructive confirmations remain open until staff acts or cancels.
+- Closing a result clears the in-memory ticket code, restores focus, and resumes the camera for the next attendee.
+- The event table exposes one Scanner button. Share, QR, copy, open, and rotation live in its modal; rotation is not a competing table action and warns that all previous links and sessions become invalid.
+
+## Data and security contract
+
+- Check-in and check-out mutations are serialized and idempotent, including duplicate browser submissions.
+- Successful re-entry increments the entrance count; legacy checked-in tickets normalize to one entrance without requiring a migration.
+- Required-ID confirmation increments the confirmed count and admits the holder. Rejection increments the rejected count but leaves the holder outside. Check-out does not alter ID counters.
+- Unknown and wrong-event tickets do not disclose holder data. Revoked tickets cannot enter or exit, and rejected operations do not rewrite attendance state.
+- The scanner retains its event-scoped capability cookie, antiforgery-protected same-origin requests, no-store/noindex/frame-deny headers, bounded inputs, and token-free rendered page.
+
+## Validation target
+
+- Release tests with Razor compilation cover lookup privacy, explicit mutations, legacy state, re-entry, counters, ID decisions, scanner UI states, the share dialog, and rotation placement.
+- Desktop and mobile browser verification must confirm no dashboard overlap, a usable share dialog, and one-handed scanner decisions at 390 × 844.
+
+final result: implementation ready for release verification
+
+---
+
 # Design QA — event-scoped public scanner v1.5.0
 
 ## Scope and evidence

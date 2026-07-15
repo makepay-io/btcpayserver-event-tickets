@@ -24,7 +24,9 @@ public sealed class ExperienceParityTests
     public void Admin_dashboard_uses_the_event_management_shell_and_preserves_primary_actions()
     {
         Assert.Contains("class=\"mp-admin-dashboard\"", AdminDashboard, StringComparison.Ordinal);
-        Assert.Equal(4, Regex.Matches(AdminDashboard, "class=\"mp-stat-card\"").Count);
+        Assert.Contains("class=\"mp-page-header\"", AdminDashboard, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"sticky-header", AdminDashboard, StringComparison.Ordinal);
+        Assert.Equal(5, Regex.Matches(AdminDashboard, "class=\"mp-stat-card\"").Count);
 
         Assert.Contains("Events", AdminDashboard, StringComparison.Ordinal);
         Assert.Contains("Recent orders", AdminDashboard, StringComparison.Ordinal);
@@ -50,8 +52,16 @@ public sealed class ExperienceParityTests
         Assert.Contains("Model.ScannerAccessTokens", AdminDashboard, StringComparison.Ordinal);
         Assert.Contains("TicketPublicUrl.ScannerPath", AdminDashboard, StringComparison.Ordinal);
         Assert.Contains("scannerToken", AdminDashboard, StringComparison.Ordinal);
-        Assert.Contains(">Scanner</a>", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("data-bs-target=\"#scanner-modal-@item.Id\"", AdminDashboard, StringComparison.Ordinal);
+        Assert.DoesNotContain(">Scanner</a>", AdminDashboard, StringComparison.Ordinal);
         Assert.Contains("asp-action=\"RotateScanner\"", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("Inside now", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("Total entrances", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("id=\"admissions-heading\"", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("ID confirmed", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("ID rejected", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("ticket.IdConfirmedCount", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("ticket.IdRejectedCount", AdminDashboard, StringComparison.Ordinal);
         Assert.DoesNotMatch(new Regex(@"\.mp-admin-dashboard\{[^}]*overflow-x\s*:\s*hidden",
             RegexOptions.CultureInvariant), AdminDashboard);
     }
@@ -70,6 +80,36 @@ public sealed class ExperienceParityTests
         Assert.Contains("EventPath(clean, storeId, eventSlug) + \"/scanner\"", publicUrls,
             StringComparison.Ordinal);
         Assert.Contains("\"?scannerToken=\" + Uri.EscapeDataString(scannerToken)", publicUrls,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Dashboard_scanner_action_opens_a_share_modal_and_rotation_lives_only_inside_it()
+    {
+        Assert.Contains("data-scanner-share", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("data-scanner-qr", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("~/js/qrcode.js", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("new QRCode(qr", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("Protected scanner URL", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("data-copy-scanner-link", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("navigator.clipboard.writeText(scannerUrl)", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("Open scanner", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("Rotate scanner link", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("Existing access will stop immediately", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("every copied link, and active staff scanner sessions", AdminDashboard,
+            StringComparison.Ordinal);
+
+        var eventRowsStart = AdminDashboard.IndexOf("<tbody data-event-rows>", StringComparison.Ordinal);
+        var eventRowsEnd = AdminDashboard.IndexOf("</tbody>", eventRowsStart, StringComparison.Ordinal);
+        Assert.True(eventRowsStart >= 0 && eventRowsEnd > eventRowsStart);
+        var eventRows = AdminDashboard[eventRowsStart..eventRowsEnd];
+        Assert.Contains(">Scanner</button>", eventRows, StringComparison.Ordinal);
+        Assert.DoesNotContain("RotateScanner", eventRows, StringComparison.Ordinal);
+
+        var modalStart = AdminDashboard.IndexOf("data-scanner-share", StringComparison.Ordinal);
+        var admissionsStart = AdminDashboard.IndexOf("id=\"admissions-heading\"", StringComparison.Ordinal);
+        Assert.True(modalStart >= 0 && admissionsStart > modalStart);
+        Assert.Contains("asp-action=\"RotateScanner\"", AdminDashboard[modalStart..admissionsStart],
             StringComparison.Ordinal);
     }
 
@@ -170,16 +210,22 @@ public sealed class ExperienceParityTests
     [Fact]
     public void Scanner_settings_explain_event_scope_and_support_manual_or_timed_close()
     {
-        Assert.Contains("Event check-in scanner", Settings, StringComparison.Ordinal);
+        Assert.Contains("Event admission scanner", Settings, StringComparison.Ordinal);
         Assert.Contains("Each event has its own protected public scanner link", Settings, StringComparison.Ordinal);
+        Assert.Contains("check-in, check-out, re-entry", Settings, StringComparison.Ordinal);
+        Assert.Contains("Enable photo-ID confirmation separately on each event", Settings, StringComparison.Ordinal);
         Assert.Contains("asp-for=\"ScannerResultSeconds\"", Settings, StringComparison.Ordinal);
         Assert.Contains("min=\"0\"", Settings, StringComparison.Ordinal);
         Assert.Contains("max=\"60\"", Settings, StringComparison.Ordinal);
         Assert.Contains("Set to 0", Settings, StringComparison.Ordinal);
+        Assert.Contains("asp-for=\"RequireIdCheck\"", EventEditor, StringComparison.Ordinal);
+        Assert.Contains("Require photo ID confirmation at admission", EventEditor, StringComparison.Ordinal);
+        Assert.Contains("Confirmed and rejected decisions are counted per ticket", EventEditor,
+            StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Public_scanner_is_mobile_first_and_ready_for_repeated_door_check_ins()
+    public void Public_scanner_is_mobile_first_and_ready_for_repeated_admission_decisions()
     {
         Assert.Contains("Layout = null", Scanner, StringComparison.Ordinal);
         Assert.Contains("name=\"viewport\"", Scanner, StringComparison.Ordinal);
@@ -200,11 +246,32 @@ public sealed class ExperienceParityTests
         Assert.Contains("Already checked in", Scanner, StringComparison.Ordinal);
         Assert.Contains("Wrong event", Scanner, StringComparison.Ordinal);
         Assert.Contains("Close · scan next", Scanner, StringComparison.Ordinal);
+        Assert.Contains("Looking up this ticket without changing its admission state", Scanner,
+            StringComparison.Ordinal);
+        Assert.Contains("v-on:click=\"submitAction('check_in', null)\"", Scanner, StringComparison.Ordinal);
+        Assert.Contains("v-on:click=\"submitAction('check_in', true)\"", Scanner, StringComparison.Ordinal);
+        Assert.Contains("v-on:click=\"beginIdRejection\"", Scanner, StringComparison.Ordinal);
+        Assert.Contains("ID matches · check in", Scanner, StringComparison.Ordinal);
+        Assert.Contains("ID does not match", Scanner, StringComparison.Ordinal);
+        Assert.Contains("v-on:click=\"beginCheckout\"", Scanner, StringComparison.Ordinal);
+        Assert.Contains("Confirm check-out", Scanner, StringComparison.Ordinal);
+        Assert.Contains("can be checked in again later", Scanner, StringComparison.Ordinal);
+        Assert.Contains("result.entranceCount", Scanner, StringComparison.Ordinal);
+        Assert.Contains("result.idConfirmedCount", Scanner, StringComparison.Ordinal);
+        Assert.Contains("result.idRejectedCount", Scanner, StringComparison.Ordinal);
+        Assert.Contains("phase === 'confirm_checkout'", Scanner, StringComparison.Ordinal);
+        Assert.Contains("phase === 'confirm_id_reject'", Scanner, StringComparison.Ordinal);
+        Assert.Contains("v-on:click.self=\"requestClose\"", Scanner, StringComparison.Ordinal);
+        Assert.Contains("this.returnToDecision()", Scanner, StringComparison.Ordinal);
+        Assert.Contains("globalThis.crypto?.randomUUID?.()", Scanner, StringComparison.Ordinal);
+        Assert.Contains("idConfirmed,operationId", Scanner, StringComparison.Ordinal);
 
         Assert.Contains("autoCloseSeconds = Model.Settings.ScannerResultSeconds", Scanner, StringComparison.Ordinal);
         Assert.Contains("if(!this.fatal&&config.autoCloseSeconds>0)", Scanner, StringComparison.Ordinal);
         Assert.Contains("setTimeout(()=>this.closeResult(),config.autoCloseSeconds*1000)", Scanner,
             StringComparison.Ordinal);
+        Assert.Contains("showDecision(result)", Scanner, StringComparison.Ordinal);
+        Assert.Contains("showTerminal(result)", Scanner, StringComparison.Ordinal);
         Assert.Contains("this.stopCamera();", Scanner, StringComparison.Ordinal);
         Assert.Contains("this.resumeCamera();", Scanner, StringComparison.Ordinal);
         Assert.Contains("this.cameraMounted=false", Scanner, StringComparison.Ordinal);
@@ -221,14 +288,17 @@ public sealed class ExperienceParityTests
     }
 
     [Fact]
-    public void Public_scanner_exchanges_the_capability_for_a_path_scoped_session_and_secures_check_in()
+    public void Public_scanner_exchanges_the_capability_and_separates_lookup_from_door_mutations()
     {
         var scannerActions = PublicController[
             PublicController.IndexOf("public async Task<IActionResult> Scanner", StringComparison.Ordinal)..
             PublicController.IndexOf("private async Task<IActionResult> ShowEvent", StringComparison.Ordinal)];
 
         Assert.Contains("[HttpGet(\"{eventId}/scanner\")]", PublicController, StringComparison.Ordinal);
+        Assert.Contains("[HttpPost(\"{eventId}/scanner/lookup\")]", PublicController, StringComparison.Ordinal);
+        Assert.Contains("[HttpPost(\"{eventId}/scanner/action\")]", PublicController, StringComparison.Ordinal);
         Assert.Contains("[HttpPost(\"{eventId}/scanner/check-in\")]", PublicController, StringComparison.Ordinal);
+        Assert.Contains("[HttpPost(\"{eventId}/scanner/check-out\")]", PublicController, StringComparison.Ordinal);
         Assert.True(Regex.Matches(PublicController, "\\[TicketNoStore\\]").Count >= 2);
         Assert.Contains("TicketCodeService.CanAccessScanner(item, scannerToken)", scannerActions,
             StringComparison.Ordinal);
@@ -242,7 +312,13 @@ public sealed class ExperienceParityTests
         Assert.Contains("Request.Cookies[TicketCodeService.ScannerSessionCookieName]", scannerActions,
             StringComparison.Ordinal);
         Assert.Contains("[ValidateAntiForgeryToken]", PublicController, StringComparison.Ordinal);
+        Assert.Contains("LookupUrl = PublicAction(nameof(ScannerLookup)", scannerActions, StringComparison.Ordinal);
+        Assert.Contains("ActionUrl = PublicAction(nameof(ScannerAction)", scannerActions, StringComparison.Ordinal);
+        Assert.Contains("repository.LookupTicket(storeId, item", scannerActions, StringComparison.Ordinal);
+        Assert.Contains("repository.ApplyScannerAction(storeId, item", scannerActions, StringComparison.Ordinal);
         Assert.Contains("repository.CheckIn(storeId, item", scannerActions, StringComparison.Ordinal);
+        Assert.Contains("repository.CheckOut(storeId, item", scannerActions, StringComparison.Ordinal);
+        Assert.Contains("Lookup is intentionally read-only", scannerActions, StringComparison.Ordinal);
         Assert.DoesNotContain("TicketEventSalePolicy.CanStartCheckout", scannerActions, StringComparison.Ordinal);
 
         Assert.Contains("Referrer-Policy", PublicController, StringComparison.Ordinal);
@@ -250,6 +326,34 @@ public sealed class ExperienceParityTests
         Assert.Contains("X-Frame-Options", PublicController, StringComparison.Ordinal);
         Assert.Contains("Permissions-Policy", PublicController, StringComparison.Ordinal);
         Assert.Contains("CryptographicOperations.FixedTimeEquals", TicketCodes, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Admission_repository_keeps_lookup_read_only_and_persists_negative_id_decisions()
+    {
+        Assert.Contains("public async Task<CheckInResult> LookupTicket", Repository, StringComparison.Ordinal);
+        Assert.Contains("return ApplyLookup(tickets, item, rawCode);", Repository, StringComparison.Ordinal);
+        Assert.Contains("public static CheckInResult ApplyLookup", Repository, StringComparison.Ordinal);
+        Assert.Contains("public static bool IsCurrentlyInside", Repository, StringComparison.Ordinal);
+        Assert.Contains("public static long EffectiveEntranceCount", Repository, StringComparison.Ordinal);
+        Assert.Contains("public async Task<CheckInResult> CheckOut", Repository, StringComparison.Ordinal);
+        Assert.Contains("public static CheckInResult ApplyCheckOut", Repository, StringComparison.Ordinal);
+        Assert.Contains("public async Task<CheckInResult> ApplyScannerAction", Repository,
+            StringComparison.Ordinal);
+
+        var checkInStart = Repository.IndexOf("public async Task<CheckInResult> CheckIn", StringComparison.Ordinal);
+        var actionStart = Repository.IndexOf("public async Task<CheckInResult> ApplyScannerAction",
+            StringComparison.Ordinal);
+        Assert.True(checkInStart >= 0 && actionStart > checkInStart);
+        var mutationMethods = Repository[checkInStart..actionStart];
+        Assert.Contains("out var changed", mutationMethods, StringComparison.Ordinal);
+        Assert.Contains("return changed;", mutationMethods, StringComparison.Ordinal);
+        Assert.DoesNotContain("return result.Success;", mutationMethods, StringComparison.Ordinal);
+
+        Assert.Contains("ticket.IdRejectedCount++", Repository, StringComparison.Ordinal);
+        Assert.Contains("changed = true", Repository, StringComparison.Ordinal);
+        Assert.Contains("ticket.EntranceCount = EffectiveEntranceCount(ticket) + 1", Repository,
+            StringComparison.Ordinal);
     }
 
     [Fact]
