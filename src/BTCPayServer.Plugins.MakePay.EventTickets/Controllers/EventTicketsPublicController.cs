@@ -16,6 +16,18 @@ using Microsoft.AspNetCore.Routing;
 
 namespace BTCPayServer.Plugins.MakePay.EventTickets.Controllers;
 
+[AttributeUsage(AttributeTargets.Method)]
+public sealed class TicketNoStoreAttribute : ActionFilterAttribute
+{
+    public override void OnActionExecuting(ActionExecutingContext context)
+    {
+        var headers = context.HttpContext.Response.Headers;
+        headers["Cache-Control"] = "no-store, no-cache, private, max-age=0, must-revalidate";
+        headers["Pragma"] = "no-cache";
+        headers["Expires"] = "0";
+    }
+}
+
 public abstract class EventTicketsPublicControllerBase(
     StoreRepository stores,
     EventTicketRepository repository,
@@ -34,11 +46,14 @@ public abstract class EventTicketsPublicControllerBase(
     public async Task<IActionResult> Storefront(string storeId)
     {
         if (await stores.FindStore(storeId) is null) return NotFound();
+        var now = DateTimeOffset.UtcNow;
+        var events = (await repository.GetEvents(storeId)).Where(item => TicketEventSalePolicy.CanStartCheckout(item, now)).ToList();
         return View("~/Views/EventTickets/Public/Storefront.cshtml", new EventStorefrontViewModel
         {
             StoreId = storeId,
             Settings = await repository.GetSettings(storeId),
-            Events = (await repository.GetEvents(storeId)).Where(item => item.Published && item.EndsAt > DateTimeOffset.UtcNow).ToList(),
+            Events = events,
+            Remaining = await repository.GetRemaining(storeId, events),
             CleanUrls = CleanUrls
         });
     }
@@ -52,7 +67,7 @@ public abstract class EventTicketsPublicControllerBase(
     private async Task<IActionResult> ShowEvent(string storeId, string eventId, bool posMode)
     {
         var item = await repository.GetEvent(storeId, eventId);
-        if (item is null || !item.Published) return NotFound();
+        if (item is null || !TicketEventSalePolicy.CanStartCheckout(item, DateTimeOffset.UtcNow)) return NotFound();
         return View("~/Views/EventTickets/Public/Event.cshtml", new EventDetailViewModel
         {
             StoreId = storeId,
@@ -66,11 +81,12 @@ public abstract class EventTicketsPublicControllerBase(
 
     [HttpPost("{eventId}/checkout")]
     [ValidateAntiForgeryToken]
+    [TicketNoStore]
     public async Task<IActionResult> StartCheckout(string storeId, string eventId, TicketSelectionInput input)
     {
         var store = await stores.FindStore(storeId);
         var item = await repository.GetEvent(storeId, eventId);
-        if (store is null || item is null || !item.Published) return NotFound();
+        if (store is null || item is null || !TicketEventSalePolicy.CanStartCheckout(item, DateTimeOffset.UtcNow)) return NotFound();
         var settings = await repository.GetSettings(storeId);
         var lines = TicketCheckoutService.BuildLines(item, input.Quantities ?? new Dictionary<string, int>());
         if (lines.Count == 0)
@@ -96,11 +112,12 @@ public abstract class EventTicketsPublicControllerBase(
 
     [HttpPost("{eventId}/checkout/{orderId}/rebuy")]
     [ValidateAntiForgeryToken]
+    [TicketNoStore]
     public async Task<IActionResult> Rebuy(string storeId, string eventId, string orderId, string? accessToken)
     {
         var previousOrder = await repository.GetOrder(storeId, orderId);
         var item = await repository.GetEvent(storeId, eventId);
-        if (previousOrder is null || item is null || previousOrder.EventId != item.Id || !item.Published ||
+        if (previousOrder is null || item is null || previousOrder.EventId != item.Id ||
             !checkout.CanAccess(previousOrder, accessToken)) return NotFound();
 
         if (previousOrder.Status == TicketOrderStatus.Paid)
@@ -117,9 +134,12 @@ public abstract class EventTicketsPublicControllerBase(
             previousOrder.Status = TicketOrderStatus.Cancelled;
         }
 
+        if (!TicketEventSalePolicy.CanStartCheckout(item, DateTimeOffset.UtcNow))
+            return RedirectPublic(nameof(Storefront), new { storeId });
+
         var settings = await repository.GetSettings(storeId);
         var lines = TicketCheckoutService.BuildRebuyLines(previousOrder, item);
-        if (previousOrder.Status != TicketOrderStatus.Cancelled || lines.Count == 0 || item.EndsAt <= DateTimeOffset.UtcNow)
+        if (previousOrder.Status != TicketOrderStatus.Cancelled || lines.Count == 0)
             return RedirectPublic(nameof(Event), new { storeId, eventId = item.Slug });
 
         var order = await repository.TryCreateOrder(storeId, item, settings, lines);
@@ -143,6 +163,7 @@ public abstract class EventTicketsPublicControllerBase(
     }
 
     [HttpGet("{eventId}/checkout/{orderId}/cart")]
+    [TicketNoStore]
     public async Task<IActionResult> Cart(string storeId, string eventId, string orderId, string? accessToken, string? promo)
     {
         var page = await BuildCheckoutPage(storeId, eventId, orderId, accessToken, 2);
@@ -164,6 +185,7 @@ public abstract class EventTicketsPublicControllerBase(
 
     [HttpPost("{eventId}/checkout/{orderId}/promotion")]
     [ValidateAntiForgeryToken]
+    [TicketNoStore]
     public async Task<IActionResult> ApplyPromotion(string storeId, string eventId, string orderId, string? accessToken, string? promoCode)
     {
         var order = await repository.GetOrder(storeId, orderId);
@@ -176,6 +198,7 @@ public abstract class EventTicketsPublicControllerBase(
     }
 
     [HttpGet("{eventId}/checkout/{orderId}/details")]
+    [TicketNoStore]
     public async Task<IActionResult> Details(string storeId, string eventId, string orderId, string? accessToken)
     {
         var page = await BuildCheckoutPage(storeId, eventId, orderId, accessToken, 3);
@@ -198,6 +221,7 @@ public abstract class EventTicketsPublicControllerBase(
 
     [HttpPost("{eventId}/checkout/{orderId}/payment")]
     [ValidateAntiForgeryToken]
+    [TicketNoStore]
     public async Task<IActionResult> CreatePayment(string storeId, string eventId, string orderId, string? accessToken, TicketCheckoutInput input, CancellationToken cancellationToken)
     {
         var page = await BuildCheckoutPage(storeId, eventId, orderId, accessToken, 3);
@@ -282,16 +306,18 @@ public abstract class EventTicketsPublicControllerBase(
     }
 
     [HttpGet("{eventId}/checkout/{orderId}/payment")]
+    [TicketNoStore]
     public async Task<IActionResult> Payment(string storeId, string eventId, string orderId, string? accessToken)
     {
         var page = await BuildCheckoutPage(storeId, eventId, orderId, accessToken, 4);
         if (page is null || string.IsNullOrWhiteSpace(page.Order.InvoiceId)) return NotFound();
-        if (page.Order.Status == TicketOrderStatus.Paid) return RedirectPublic(nameof(Order), new { storeId, orderId, accessToken });
+        if (page.Order.Status is TicketOrderStatus.Paid or TicketOrderStatus.Cancelled)
+            return RedirectPublic(nameof(Order), new { storeId, orderId, accessToken });
         return View("~/Views/EventTickets/Public/Payment.cshtml", page);
     }
 
     [HttpGet("order/{orderId}/status")]
-    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [TicketNoStore]
     public async Task<IActionResult> OrderStatus(string storeId, string orderId, string? accessToken)
     {
         var order = await repository.GetOrder(storeId, orderId);
@@ -299,7 +325,9 @@ public abstract class EventTicketsPublicControllerBase(
         if (order.Status == TicketOrderStatus.Paid)
             return Ok(new TicketPaymentStatus("paid", PublicActionLink(nameof(Order), new { storeId, orderId, accessToken }), "Payment confirmed."));
         var item = await repository.GetEvent(storeId, order.EventId);
-        var restartUrl = item is null ? PublicAction(nameof(Storefront), new { storeId }) : PublicAction(nameof(Event), new { storeId, eventId = item.Slug });
+        var restartUrl = item is null || !TicketEventSalePolicy.CanStartCheckout(item, DateTimeOffset.UtcNow)
+            ? PublicAction(nameof(Storefront), new { storeId })
+            : PublicAction(nameof(Event), new { storeId, eventId = item.Slug });
         if (order.Status == TicketOrderStatus.Cancelled)
             return Ok(new TicketPaymentStatus("cancelled", restartUrl, "This invoice can no longer be paid. Choose your tickets again."));
         if (!string.IsNullOrWhiteSpace(order.InvoiceId))
@@ -323,6 +351,7 @@ public abstract class EventTicketsPublicControllerBase(
     }
 
     [HttpGet("order/{orderId}")]
+    [TicketNoStore]
     public async Task<IActionResult> Order(string storeId, string orderId, string? accessToken)
     {
         var order = await repository.GetOrder(storeId, orderId);
@@ -361,6 +390,7 @@ public abstract class EventTicketsPublicControllerBase(
     }
 
     [HttpGet("order/{orderId}/tickets.pdf")]
+    [TicketNoStore]
     public async Task<IActionResult> Pdf(string storeId, string orderId, string? accessToken)
     {
         var order = await repository.GetOrder(storeId, orderId);
@@ -374,6 +404,7 @@ public abstract class EventTicketsPublicControllerBase(
     }
 
     [HttpGet("order/{orderId}/wallet/apple/{ticketId}")]
+    [TicketNoStore]
     public async Task<IActionResult> AppleWallet(string storeId, string orderId, string ticketId, string? accessToken)
     {
         var order = await repository.GetOrder(storeId, orderId);

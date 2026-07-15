@@ -1,5 +1,5 @@
 @model TicketCheckoutPageViewModel
-@{ Layout = null; var analyticsEcommerce = TicketAnalytics.ForOrder(Model.Order, Model.Event, Model.Lines); var analyticsOrderId = TicketAnalytics.AnalyticsTransactionId(Model.Order); var analyticsContext = new EventTicketAnalyticsContext { Settings = Model.Settings, StoreId = Model.StoreId, PageType = "cart", EventId = Model.Event.Id, EventSlug = Model.Event.Slug }; }
+@{ Layout = null; var eventOnSale = TicketEventSalePolicy.CanStartCheckout(Model.Event, DateTimeOffset.UtcNow); var promoInvalid = !string.IsNullOrWhiteSpace(Model.PromoMessage) && Model.Order.PromoCode is null; var analyticsEcommerce = TicketAnalytics.ForOrder(Model.Order, Model.Event, Model.Lines); var analyticsOrderId = TicketAnalytics.AnalyticsTransactionId(Model.Order); var analyticsContext = new EventTicketAnalyticsContext { Settings = Model.Settings, StoreId = Model.StoreId, PageType = "cart", EventId = Model.Event.Id, EventSlug = Model.Event.Slug }; }
 <!doctype html>
 <html lang="en">
 <head>
@@ -17,12 +17,16 @@
     {
         <section class="et-pending">
             <h1>This reservation has ended</h1>
-            <p class="et-section-copy">Your tickets were released. Rebuy reserves the same selection in a fresh session.</p>
+            <p class="et-section-copy">@(eventOnSale ? "Your tickets were released. Rebuy reserves the same selection in a fresh session." : "Your tickets were released, and this event is no longer on sale. Browse the current events to continue.")</p>
             <div class="et-restart-actions">
-                <form method="post" asp-action="Rebuy" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
-                    <button class="et-primary" type="submit" data-loading-title="Reserving your tickets…" data-loading-message="We are creating a fresh reservation with your previous selection.">Rebuy tickets</button>
-                </form>
-                <a class="et-secondary" asp-action="Event" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug">Choose different tickets</a>
+                @if (eventOnSale)
+                {
+                    <form method="post" asp-action="Rebuy" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
+                        <button class="et-primary" type="submit" data-loading-title="Reserving your tickets…" data-loading-message="We are creating a fresh reservation with your previous selection.">Rebuy tickets</button>
+                    </form>
+                    <a class="et-secondary" asp-action="Event" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug">Choose different tickets</a>
+                }
+                <a class="et-secondary" asp-action="Storefront" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)">Browse events</a>
             </div>
         </section>
     }
@@ -45,11 +49,15 @@
             </div>
             @if (!string.IsNullOrWhiteSpace(Model.Settings.PromoCode) && Model.Settings.PromoPercent > 0)
             {
-                <form class="et-promo-card" method="post" asp-action="ApplyPromotion" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">
+                <form class="et-promo-card" method="post" asp-action="ApplyPromotion" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken" data-loading-title="Applying your promotion…" data-loading-message="We are updating the reserved ticket total.">
                     <h3>Have a promotion code?</h3>
-                    <p>@Model.Settings.PromoDescription</p>
-                    @if (!string.IsNullOrWhiteSpace(Model.PromoMessage)) { <div class="@(Model.Order.PromoCode is null ? "et-validation" : "")">@Model.PromoMessage</div> }
-                    <div class="et-inline-form"><input class="et-input" name="promoCode" value="@Model.Order.PromoCode" autocomplete="off" placeholder="Enter your code"><button class="et-secondary" type="submit" data-et-requires-session>Apply</button></div>
+                    <p id="promo-description">@Model.Settings.PromoDescription</p>
+                    <label for="promo-code">Promotion code</label>
+                    <div class="et-inline-form">
+                        <input class="et-input" id="promo-code" name="promoCode" value="@Model.Order.PromoCode" maxlength="80" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Enter your code" aria-describedby="promo-description promo-result" aria-invalid="@(promoInvalid ? "true" : null)">
+                        <button class="et-secondary" type="submit" data-et-requires-session>Apply</button>
+                    </div>
+                    <div id="promo-result" class="@(promoInvalid ? "et-validation" : "")" role="status" aria-live="polite">@Model.PromoMessage</div>
                 </form>
             }
             <div class="et-summary">
@@ -62,8 +70,8 @@
                 <a class="et-primary" data-et-requires-session data-begin-checkout asp-action="Details" asp-route-storeId="@(Model.CleanUrls ? null : Model.StoreId)" asp-route-eventId="@Model.Event.Slug" asp-route-orderId="@Model.Order.Id" asp-route-accessToken="@Model.AccessToken">Continue</a>
             </div>
         </section>
-        <partial name="~/Views/EventTickets/Public/_Footer.cshtml" model="Model.Settings" />
     }
+    <partial name="~/Views/EventTickets/Public/_Footer.cshtml" model="Model.Settings" />
 </main>
 @if (Model.Order.Status == TicketOrderStatus.Pending)
 {

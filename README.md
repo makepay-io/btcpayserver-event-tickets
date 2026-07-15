@@ -2,6 +2,8 @@
 
 A self-hosted event storefront, ticket delivery system, POS, and QR check-in workflow that turns paid BTCPay invoices into customer tickets.
 
+Version 1.4.0 brings the Event Tickets dashboard, settings workspace, live editor, and public event directory in line with the Digital Products experience. It also hardens invoice-backed reservation expiry, ended-event and sold-out handling, pending-order refresh, non-cacheable customer pages, consent-aware analytics replay, saved attendee details, BTCPay modal recovery, responsive behavior, and enforced MakePay attribution.
+
 Version 1.3.1 adds a native QR-code sidebar icon that follows BTCPay's light, dark, hover, and active navigation states.
 
 Version 1.3.0 adds native BTCPay App domain mapping, clean branded ticket URLs, and an in-product setup guide with safe DNS/TLS instructions for BTCPay Docker operators.
@@ -19,7 +21,7 @@ Version 1.3.0 adds native BTCPay App domain mapping, clean branded ticket URLs, 
 - Apple Wallet `.pkpass` generation with merchant-provided Pass Type certificate and Google Wallet signed save links with a service account.
 - Configurable privacy/terms links, attendee notice, optional phone/country/company fields, confirmation copy, and Resend or SMTP delivery templates.
 - Mutually exclusive Google Tag Manager or direct Google Analytics 4 integration with consent controls, Do Not Track support, CSP allowlisting, and normalized ecommerce events throughout the ticket funnel.
-- MakePay.io promotion area for decentralized acceptance of 90+ currencies.
+- Enforced BTCPay + MakePay attribution for decentralized acceptance of 90+ currencies.
 
 ## Analytics setup
 

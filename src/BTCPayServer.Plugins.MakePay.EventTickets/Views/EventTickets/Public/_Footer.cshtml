@@ -1,8 +1,40 @@
 @model EventTicketSettings
-<footer class="et-footer">
-    <div>@Model.FooterText</div>
-    @if (Model.ShowMakePayPromotion)
-    {
-        <div class="et-promotion">@Model.PromotionText <a href="https://makepay.io" target="_blank" rel="noopener">Enable multicurrency</a></div>
-    }
+@{
+    var cleanUrls = string.Equals(ViewContext.RouteData.Values["controller"]?.ToString(), TicketPublicUrl.CleanController, StringComparison.OrdinalIgnoreCase);
+    var footerStoreId = cleanUrls ? null : ViewContext.RouteData.Values["storeId"]?.ToString();
+}
+<footer class="et-footer" aria-label="Event ticket store information">
+    <div class="et-footer-grid">
+        <section class="et-footer-brand" aria-label="Store">
+            <a class="et-footer-title" asp-action="Storefront" asp-route-storeId="@footerStoreId">@Model.StorefrontTitle</a>
+            <p>@Model.FooterText</p>
+        </section>
+        @if (!string.IsNullOrWhiteSpace(Model.PrivacyUrl) || !string.IsNullOrWhiteSpace(Model.TermsUrl))
+        {
+            <nav class="et-footer-links" aria-label="Policies">
+                <p class="et-footer-kicker">Policies</p>
+                @if (!string.IsNullOrWhiteSpace(Model.PrivacyUrl))
+                {
+                    <a href="@Model.PrivacyUrl" target="_blank" rel="noopener noreferrer">Privacy policy</a>
+                }
+                @if (!string.IsNullOrWhiteSpace(Model.TermsUrl))
+                {
+                    <a href="@Model.TermsUrl" target="_blank" rel="noopener noreferrer">Terms &amp; conditions</a>
+                }
+            </nav>
+        }
+        <section class="et-footer-powered" aria-label="Technology partners">
+            <p class="et-footer-kicker">Powered by BTCPay &amp; MakePay.io</p>
+            <div class="et-footer-lockup">
+                <a class="et-footer-partner" href="https://btcpayserver.org" target="_blank" rel="noopener noreferrer" aria-label="Visit BTCPay Server">
+                    <img src="~/img/btcpay-logo-white-txt.svg" width="138" height="38" loading="lazy" decoding="async" alt="BTCPay Server">
+                </a>
+                <a class="et-footer-partner et-footer-makepay" href="https://makepay.io" target="_blank" rel="noopener noreferrer" aria-label="Visit MakePay.io">✦ MakePay</a>
+            </div>
+        </section>
+    </div>
+    <div class="et-footer-bottom">
+        <span>© @DateTimeOffset.UtcNow.Year @Model.StorefrontTitle</span>
+        <a href="https://makepay.io" target="_blank" rel="noopener noreferrer">@EventTicketRepository.EnforcedPromotionText</a>
+    </div>
 </footer>

@@ -7,9 +7,27 @@ namespace BTCPayServer.Plugins.MakePay.EventTickets.Services;
 
 public sealed class EventTicketRepository(StoreRepository stores)
 {
+    public const string EnforcedPromotionText = "Created by MakePay.io — accept 90+ currencies in a decentralized way with BTCPay Server.";
+
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new(StringComparer.OrdinalIgnoreCase);
-    public async Task<EventTicketSettings> GetSettings(string storeId) => await stores.GetSettingAsync<EventTicketSettings>(storeId, EventTicketsPlugin.SettingsKey) ?? new();
-    public Task SaveSettings(string storeId, EventTicketSettings value) => stores.UpdateSetting(storeId, EventTicketsPlugin.SettingsKey, value);
+    public async Task<EventTicketSettings> GetSettings(string storeId)
+    {
+        var settings = await stores.GetSettingAsync<EventTicketSettings>(storeId, EventTicketsPlugin.SettingsKey) ?? new();
+        EnforceMakePayAttribution(settings);
+        return settings;
+    }
+
+    public Task SaveSettings(string storeId, EventTicketSettings value)
+    {
+        EnforceMakePayAttribution(value);
+        return stores.UpdateSetting(storeId, EventTicketsPlugin.SettingsKey, value);
+    }
+
+    public static void EnforceMakePayAttribution(EventTicketSettings settings)
+    {
+        settings.ShowMakePayPromotion = true;
+        settings.PromotionText = EnforcedPromotionText;
+    }
     public async Task<IReadOnlyList<TicketEvent>> GetEvents(string storeId) => (await stores.GetSettingAsync<TicketEventCollection>(storeId, EventTicketsPlugin.EventsKey) ?? new()).Events.OrderBy(e => e.StartsAt).ToList();
     public async Task<TicketEvent?> GetEvent(string storeId, string idOrSlug) => (await GetEvents(storeId)).FirstOrDefault(e => e.Id.Equals(idOrSlug, StringComparison.OrdinalIgnoreCase) || e.Slug.Equals(idOrSlug, StringComparison.OrdinalIgnoreCase));
     public async Task SaveEvent(string storeId, TicketEvent item) => await Mutate<TicketEventCollection>(storeId, EventTicketsPlugin.EventsKey, value =>
@@ -26,7 +44,7 @@ public sealed class EventTicketRepository(StoreRepository stores)
         {
             var now = DateTimeOffset.UtcNow;
             foreach (var stale in orders.Orders.Values.Where(order => TicketReservationPolicy.CanExpire(order, now))) stale.Status = TicketOrderStatus.Cancelled;
-            if (lines.Count == 0) return;
+            if (!TicketEventSalePolicy.CanStartCheckout(item, now) || lines.Count == 0) return;
             foreach (var line in lines)
             {
                 var type = item.TicketTypes.FirstOrDefault(ticketType => ticketType.Id == line.TicketTypeId && ticketType.Active);
@@ -85,14 +103,28 @@ public sealed class EventTicketRepository(StoreRepository stores)
     {
         var now = DateTimeOffset.UtcNow;
         var orders = (await GetOrders(storeId)).Where(order => order.EventId == item.Id && TicketReservationPolicy.HoldsInventory(order, now)).ToList();
-        return item.TicketTypes.ToDictionary(type => type.Id, type => type.Capacity == 0
+        return CalculateRemaining(item, orders);
+    }
+    public async Task<IReadOnlyDictionary<string, Dictionary<string, int?>>> GetRemaining(string storeId, IReadOnlyList<TicketEvent> items)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var orders = (await GetOrders(storeId)).Where(order => TicketReservationPolicy.HoldsInventory(order, now)).ToList();
+        return items.ToDictionary(item => item.Id, item => CalculateRemaining(item, orders.Where(order => order.EventId == item.Id)));
+    }
+    private static Dictionary<string, int?> CalculateRemaining(TicketEvent item, IEnumerable<TicketOrder> orders) =>
+        item.TicketTypes.ToDictionary(type => type.Id, type => type.Capacity == 0
             ? (int?)null
             : Math.Max(0, type.Capacity - orders.SelectMany(order => TicketCheckoutService.ResolveLines(order, item)).Where(line => line.TicketTypeId == type.Id).Sum(line => line.Quantity)));
-    }
     private async Task Mutate<T>(string storeId, string key, Action<T> change) where T : class, new()
     {
         var gate = _locks.GetOrAdd(storeId + ":" + key, _ => new SemaphoreSlim(1, 1)); await gate.WaitAsync(); try { var value = await stores.GetSettingAsync<T>(storeId, key) ?? new(); change(value); await stores.UpdateSetting(storeId, key, value); } finally { gate.Release(); }
     }
+}
+
+public static class TicketEventSalePolicy
+{
+    public static bool CanStartCheckout(TicketEvent item, DateTimeOffset now) =>
+        item.Published && item.EndsAt > now;
 }
 
 public static class TicketReservationPolicy

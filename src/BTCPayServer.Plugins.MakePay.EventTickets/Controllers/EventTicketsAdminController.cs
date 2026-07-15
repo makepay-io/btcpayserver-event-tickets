@@ -102,7 +102,8 @@ public sealed class EventTicketsAdminController(
         ViewData["CreateEventTicketsAppUrl"] = Url.Action("CreateApp", "UIApps",
             new { storeId, appType = EventTicketsAppType.AppType }) ??
             $"{Request.PathBase}/stores/{storeId}/apps/create/{EventTicketsAppType.AppType}";
-        var previewEvent = (await repository.GetEvents(storeId)).FirstOrDefault(item => item.Published);
+        var previewEvent = (await repository.GetEvents(storeId))
+            .FirstOrDefault(item => TicketEventSalePolicy.CanStartCheckout(item, DateTimeOffset.UtcNow));
         ViewData["PreviewEventSlug"] = previewEvent?.Slug;
         var legacyPath = previewEvent is null
             ? Url.Action(nameof(EventTicketsPublicControllerBase.Storefront), TicketPublicUrl.LegacyController, new { storeId })

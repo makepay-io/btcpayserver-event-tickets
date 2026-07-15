@@ -61,3 +61,41 @@ passed
 - Browser console and rendered public state: no application-visible regression observed.
 
 final result: passed
+
+---
+
+# Design QA — Digital Products parity and public experience v1.4.0
+
+## Evidence
+
+- Supplied dashboard defect: `.design-qa/before-admin-dashboard.png`
+- Fixed dashboard: `.design-qa/after-admin-dashboard-v140.png`
+- Direct reference/fixed comparison: `.design-qa/reference-vs-admin-dashboard-v140.png`
+- Settings before/fixed: `.design-qa/before-settings.png`, `.design-qa/after-settings-v140.png`
+- Public event before/fixed: `.design-qa/before-public-event.png`, `.design-qa/after-public-event-window.png`
+
+## Admin and settings verification
+
+- The Event Tickets dashboard now uses BTCPay's dark surfaces, borders, typography, green actions, summary cards, searchable/filterable event management, recent orders, and native sidebar icon treatment used by Digital Products.
+- The dashboard clipping defect was traced to a local `overflow-x:hidden` formatting context that blocked BTCPay's sticky-header negative-margin layout. Removing that rule eliminated the exact 80-pixel overlap: the header bottom and summary-grid top both measure 201.992 pixels at 1440 × 900.
+- Desktop and 390 × 844 mobile checks report zero document-level horizontal overflow and zero header/card overlap. The four summary cards, primary actions, two management panels, table scrolling, and event actions remain usable.
+- Settings expose five keyboard-accessible tabs, preserved active state, error-aware tab activation, root-path-safe BTCPay icons/assets, two save points, a responsive fullscreen editor, and visible editor controls at 800 × 768.
+- Payment preview uses the server-resolved BTCPay logo path. The sandboxed preview preserves its scroll position across edits and supports Tickets, Cart, Checkout, Payment, Success, Desktop, and Mobile states.
+
+## Public experience verification
+
+- The storefront now presents a professional event directory with accurate live availability and lowest purchasable tier pricing, sold-out handling, branded navigation, clear event cards, and a shared enforced BTCPay/MakePay footer.
+- Event selection, cart, attendee checkout, payment, completion, expired-order recovery, PDF/wallet delivery, favicon configuration, custom-domain guidance, and consent-aware GTM/GA4 ecommerce events were checked for shared theme and interaction parity.
+- Invoice-backed or partially paid orders are protected from reservation expiry redirects; expired unpaid reservations offer a direct rebuy path and retain buyer/attendee form data locally.
+- The storefront and event page have zero document-level overflow at 390 × 844. The public event headline has zero measured text overflow, both ticket rows render, and the enforced BTCPay and MakePay backlinks are present.
+
+## Validation
+
+- Release tests: 85 passed, 0 failed.
+- Razor publish: passed with `RazorCompileOnBuild=true`.
+- Live plugin startup: `BTCPayServer.Plugins.MakePay.EventTickets - 1.4.0.0`.
+- Live HTTP checks: authenticated admin redirects correctly; public storefront returns HTTP 200.
+- Browser diagnostics: no application errors; only normal BTCPay Blazor connection information was recorded.
+- The only build advisory is the upstream BTCPay Server MailKit 4.8.0 NU1902 warning.
+
+final result: passed

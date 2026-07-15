@@ -1,7 +1,10 @@
 @model TicketCheckoutPageViewModel
 @if (Model.Settings.ShowCountdown && Model.Order.Status == TicketOrderStatus.Pending && string.IsNullOrWhiteSpace(Model.Order.InvoiceId))
 {
-    var expiredUrl = Url.Action("Event", values: new { storeId = Model.CleanUrls ? null : Model.StoreId, eventId = Model.Event.Slug });
+    var canReturnToEvent = Model.Event.Published && Model.Event.EndsAt > Model.Order.ReservationExpiresAt;
+    var expiredUrl = canReturnToEvent
+        ? Url.Action("Event", values: new { storeId = Model.CleanUrls ? null : Model.StoreId, eventId = Model.Event.Slug })
+        : Url.Action("Storefront", values: new { storeId = Model.CleanUrls ? null : Model.StoreId });
     <div class="et-timer" data-et-expiry="@Model.Order.ReservationExpiresAt.ToString("O")" data-et-expired-url="@expiredUrl"><strong>--:--</strong> left to secure your tickets</div>
     <script>
         (()=>{const bar=document.querySelector('[data-et-expiry]');if(!bar)return;const value=bar.querySelector('strong'),end=Date.parse(bar.dataset.etExpiry);let timer=null,redirecting=false;const tick=()=>{const left=Math.max(0,Math.ceil((end-Date.now())/1000)),minutes=Math.floor(left/60),seconds=left%60;value.textContent=`${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;if(left===0&&!redirecting){redirecting=true;bar.lastChild.textContent=' reservation expired — returning to tickets';document.querySelectorAll('[data-et-requires-session]').forEach(control=>{control.setAttribute('aria-disabled','true');control.classList.add('is-disabled');if(control.tagName!=='A')control.disabled=true});if(timer)clearInterval(timer);setTimeout(()=>window.location.replace(bar.dataset.etExpiredUrl),650)}};tick();timer=setInterval(tick,1000)})();
