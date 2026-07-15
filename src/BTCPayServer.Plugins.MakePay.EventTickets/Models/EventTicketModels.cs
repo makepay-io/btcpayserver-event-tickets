@@ -66,6 +66,7 @@ public sealed class EventTicketSettings
     public TicketFontStyle FontStyle { get; set; } = TicketFontStyle.Modern;
     [Range(35, 60)] public int BrandPanelWidth { get; set; } = 50;
     [Range(5, 60)] public int CheckoutMinutes { get; set; } = 15;
+    [Range(0, 60)] public int ScannerResultSeconds { get; set; } = 5;
     public bool ShowCountdown { get; set; } = true;
     public bool RequirePhone { get; set; } = true;
     public bool RequireCountry { get; set; } = true;
@@ -121,6 +122,8 @@ public sealed class TicketEvent
     [Url, StringLength(500)] public string? BannerUrl { get; set; }
     public bool Published { get; set; } = true;
     public List<TicketType> TicketTypes { get; set; } = [];
+    public string? ProtectedScannerAccessToken { get; set; }
+    public string? ScannerAccessTokenHash { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
@@ -252,11 +255,21 @@ public sealed class EventTicketsDashboardViewModel
     public required IReadOnlyList<TicketEvent> Events { get; init; }
     public required IReadOnlyList<TicketOrder> Orders { get; init; }
     public required IReadOnlyList<IssuedTicket> Tickets { get; init; }
+    public required IReadOnlyDictionary<string, string> ScannerAccessTokens { get; init; }
     public string? MappedBaseUrl { get; init; }
 }
 
 public sealed class EventStorefrontViewModel { public required string StoreId { get; init; } public required EventTicketSettings Settings { get; init; } public required IReadOnlyList<TicketEvent> Events { get; init; } public required IReadOnlyDictionary<string, Dictionary<string, int?>> Remaining { get; init; } public bool CleanUrls { get; init; } }
 public sealed class EventDetailViewModel { public required string StoreId { get; init; } public required EventTicketSettings Settings { get; init; } public required TicketEvent Event { get; init; } public required Dictionary<string, int?> Remaining { get; init; } public bool PosMode { get; init; } public bool CleanUrls { get; init; } }
+public sealed class EventScannerViewModel
+{
+    public required string StoreId { get; init; }
+    public required EventTicketSettings Settings { get; init; }
+    public required TicketEvent Event { get; init; }
+    public required string CheckInUrl { get; init; }
+    public required string EventUrl { get; init; }
+    public bool CleanUrls { get; init; }
+}
 
 public sealed class EventTicketAnalyticsContext
 {
@@ -305,3 +318,4 @@ public sealed class TicketOrderViewModel
 
 public sealed record TicketPaymentStatus(string Status, string? RedirectUrl, string Message);
 public sealed record CheckInResult(bool Success, string Status, string? TicketId, string? Attendee, string? TicketType, DateTimeOffset? CheckedInAt, string Message);
+public sealed record ScannerCheckInRequest(string Code, string? Gate);

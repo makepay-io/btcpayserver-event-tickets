@@ -2,6 +2,8 @@
 
 A self-hosted event storefront, ticket delivery system, POS, and QR check-in workflow that turns paid BTCPay invoices into customer tickets.
 
+Version 1.5.0 replaces the global admin scanner with protected, per-event public scanner pages optimized for repeated mobile check-in. Each scanner validates only its event, shows the ticket holder and ticket type, supports camera, saved-image, and manual entry, and closes results automatically after a store-configurable delay (five seconds by default).
+
 Version 1.4.0 brings the Event Tickets dashboard, settings workspace, live editor, and public event directory in line with the Digital Products experience. It also hardens invoice-backed reservation expiry, ended-event and sold-out handling, pending-order refresh, non-cacheable customer pages, consent-aware analytics replay, saved attendee details, BTCPay modal recovery, responsive behavior, and enforced MakePay attribution.
 
 Version 1.3.1 adds a native QR-code sidebar icon that follows BTCPay's light, dark, hover, and active navigation states.
@@ -16,7 +18,7 @@ Version 1.3.0 adds native BTCPay App domain mapping, clean branded ticket URLs, 
 - Multiple ticket types, capacity controls, quantity limits, draft/published events, and an event-specific POS view.
 - Atomic inventory reservations and automatic release when reservations or invoices expire or become invalid.
 - Cryptographically random ticket codes stored as one-way hashes with encrypted recoverable values.
-- Browser camera QR scanner using `BarcodeDetector`, manual scanner input fallback, atomic first check-in, and duplicate/revoked responses.
+- Per-event, mobile-first camera QR scanner with a protected capability link, manual and saved-image fallbacks, atomic first check-in, attendee and ticket-type results, duplicate/revoked/wrong-event responses, and configurable automatic result closing.
 - Adjustable HTML email through Resend or BTCPay store SMTP, with an attached standards-compliant PDF ticket document.
 - Apple Wallet `.pkpass` generation with merchant-provided Pass Type certificate and Google Wallet signed save links with a service account.
 - Configurable privacy/terms links, attendee notice, optional phone/country/company fields, confirmation copy, and Resend or SMTP delivery templates.
@@ -67,7 +69,9 @@ To enable native clean routing:
 
 BTCPay supplies the mapped App ID to the plugin's clean controller through `DomainMappingConstraint`. The plugin then derives the store only from that `AppData`; a route, query, or form value named `storeId` cannot select another store. If multiple App records exist, canonical URL generation follows the App actually selected in Policies rather than assuming the oldest one.
 
-The mapped hostname root redirects to `/events`. BTCPay deployments configured below a root path preserve it consistently, for example `https://tickets.example.com/btcpay/events`. Every generated public link uses the mapped host and clean path, including invoice return metadata, email delivery, payment polling, protected order pages, rebuy, PDFs, and wallet passes. BTCPay resolves the first exact hostname row, so duplicate rows must be removed; a later conflicting row is inactive. The authenticated QR scanner remains a store-admin route and is not exposed on the public hostname.
+The mapped hostname root redirects to `/events`. BTCPay deployments configured below a root path preserve it consistently, for example `https://tickets.example.com/btcpay/events`. Every generated public link uses the mapped host and clean path, including invoice return metadata, email delivery, payment polling, protected order pages, rebuy, PDFs, wallet passes, and each event's scanner. BTCPay resolves the first exact hostname row, so duplicate rows must be removed; a later conflicting row is inactive.
+
+Each dashboard event row has its own **Scanner** link. Treat this URL as a staff credential: opening it exchanges the protected query token for a renewable 12-hour, HttpOnly, event-path-scoped cookie and immediately redirects to a token-free URL. **Rotate** invalidates every previous link and scanner session for that event. The standalone scanner is excluded from storefront analytics and search indexing and only accepts tickets issued for that event.
 
 Existing `/stores/{storeId}/events/…` routes remain available for compatibility. Once a mapping exists, safe GET and HEAD requests redirect permanently to the canonical hostname while POST requests remain on their submitted origin, avoiding an unsafe cross-host form replay.
 

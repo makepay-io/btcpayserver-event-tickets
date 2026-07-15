@@ -144,7 +144,7 @@
         </section>
 
         <section class="mp-settings-panel" id="settings-panel-delivery" role="tabpanel" aria-labelledby="settings-tab-delivery" data-settings-panel="delivery" hidden>
-            <header class="mp-settings-panel-head"><div><h3>Delivery &amp; wallets</h3><p>Send protected ticket links, attach QR-enabled PDFs, and configure Apple and Google Wallet passes.</p></div></header>
+            <header class="mp-settings-panel-head"><div><h3>Delivery, wallets &amp; check-in</h3><p>Send protected ticket links, configure wallet passes, and control the event-scoped mobile scanner.</p></div></header>
             <div class="mp-settings-panel-body"><div class="mp-settings-grid">
                 <section class="mp-settings-section">
                     <div class="mp-settings-section-head"><div><h4>Email &amp; PDF</h4><p>Use BTCPay SMTP or Resend while keeping API credentials encrypted.</p></div></div>
@@ -173,6 +173,11 @@
                 <section class="mp-settings-section">
                     <div class="mp-settings-section-head"><div><h4>Operational readiness</h4><p>Wallet buttons appear only when the corresponding credentials are complete.</p></div></div>
                     <div class="mp-settings-note"><strong>PDF delivery:</strong> @(Model.AttachPdf ? "Enabled" : "Disabled")<br><strong>Apple Wallet:</strong> @(string.IsNullOrWhiteSpace(Model.ApplePassTypeIdentifier) ? "Not configured" : "Configured")<br><strong>Google Wallet:</strong> @(string.IsNullOrWhiteSpace(Model.GoogleClassId) ? "Not configured" : "Configured")</div>
+                </section>
+                <section class="mp-settings-section is-wide">
+                    <div class="mp-settings-section-head"><div><h4>Event check-in scanner</h4><p>Each event has its own protected public scanner link. Configure how quickly a result closes before the next ticket can be scanned.</p></div></div>
+                    <div class="row"><div class="col-md-5 form-group mb-0"><label asp-for="ScannerResultSeconds" class="form-label">Result auto-close (seconds)</label><input asp-for="ScannerResultSeconds" type="number" min="0" max="60" step="1" class="form-control"><span asp-validation-for="ScannerResultSeconds" class="text-danger"></span><div class="form-text">Set to 0 to keep each result open until staff selects “Close · scan next”. Default: 5 seconds.</div></div></div>
+                    <div class="mp-settings-note mt-3"><strong>Privacy-safe by design.</strong> Scanner pages are event-scoped, excluded from search and analytics, and exchange their protected link into an HttpOnly staff session before scanning begins.</div>
                 </section>
             </div></div>
         </section>

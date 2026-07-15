@@ -64,6 +64,59 @@ public abstract class EventTicketsPublicControllerBase(
     [HttpGet("{eventId}/pos")]
     public Task<IActionResult> Pos(string storeId, string eventId) => ShowEvent(storeId, eventId, true);
 
+    [HttpGet("{eventId}/scanner")]
+    [TicketNoStore]
+    public async Task<IActionResult> Scanner(string storeId, string eventId, string? scannerToken)
+    {
+        PrepareScannerResponse();
+        var item = await repository.GetEvent(storeId, eventId);
+        if (item is null) return NotFound();
+
+        if (!string.IsNullOrWhiteSpace(scannerToken))
+        {
+            if (!TicketCodeService.CanAccessScanner(item, scannerToken)) return NotFound();
+            SetScannerSessionCookie(storeId, item.Slug, scannerToken);
+            return RedirectPublic(nameof(Scanner), new { storeId, eventId = item.Slug });
+        }
+
+        var scannerSession = Request.Cookies[TicketCodeService.ScannerSessionCookieName];
+        if (!TicketCodeService.CanAccessScanner(item, scannerSession))
+            return NotFound();
+        SetScannerSessionCookie(storeId, item.Slug, scannerSession!);
+
+        var settings = await repository.GetSettings(storeId);
+        return View("~/Views/EventTickets/Public/Scanner.cshtml", new EventScannerViewModel
+        {
+            StoreId = storeId,
+            Settings = settings,
+            Event = item,
+            CheckInUrl = PublicAction(nameof(ScannerCheckIn), new { storeId, eventId = item.Slug }) ?? "",
+            EventUrl = PublicAction(nameof(Event), new { storeId, eventId = item.Slug }) ?? "",
+            CleanUrls = CleanUrls
+        });
+    }
+
+    [HttpPost("{eventId}/scanner/check-in")]
+    [ValidateAntiForgeryToken]
+    [TicketNoStore]
+    public async Task<IActionResult> ScannerCheckIn(string storeId, string eventId, [FromBody] ScannerCheckInRequest? request)
+    {
+        PrepareScannerResponse();
+        var item = await repository.GetEvent(storeId, eventId);
+        if (item is null) return NotFound();
+        var scannerSession = Request.Cookies[TicketCodeService.ScannerSessionCookieName];
+        if (!TicketCodeService.CanAccessScanner(item, scannerSession))
+            return Unauthorized(new CheckInResult(false, "unauthorized", null, null, null, null, "Scanner access expired. Reopen the event scanner link."));
+        SetScannerSessionCookie(storeId, item.Slug, scannerSession!);
+        if (request is null || string.IsNullOrWhiteSpace(request.Code))
+            return BadRequest(new CheckInResult(false, "missing", null, null, null, null, "Scan or enter a ticket code."));
+        if (request.Code.Length > 512 || request.Gate?.Length > 80)
+            return BadRequest(new CheckInResult(false, "invalid", null, null, null, null, "The scanner input is too long."));
+
+        var result = await repository.CheckIn(storeId, item, request.Code, "Event staff scanner", request.Gate);
+        return result.Success ? Ok(result) : Conflict(result);
+    }
+
     private async Task<IActionResult> ShowEvent(string storeId, string eventId, bool posMode)
     {
         var item = await repository.GetEvent(storeId, eventId);
@@ -484,6 +537,30 @@ public abstract class EventTicketsPublicControllerBase(
     private string? PublicActionLink(string action, object values) =>
         Url.ActionLink(action, CleanUrls ? TicketPublicUrl.CleanController : TicketPublicUrl.LegacyController,
             PublicValues(values));
+
+    private void PrepareScannerResponse()
+    {
+        Response.Headers["Referrer-Policy"] = "no-referrer";
+        Response.Headers["X-Robots-Tag"] = "noindex, nofollow, noarchive";
+        Response.Headers["X-Frame-Options"] = "DENY";
+        Response.Headers["Permissions-Policy"] = "camera=(self)";
+    }
+
+    private void SetScannerSessionCookie(string storeId, string eventSlug, string token)
+    {
+        var path = PublicAction(nameof(Scanner), new { storeId, eventId = eventSlug })
+                   ?? Request.PathBase.Add(Request.Path).Value
+                   ?? "/";
+        Response.Cookies.Append(TicketCodeService.ScannerSessionCookieName, token, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = Request.IsHttps,
+            SameSite = SameSiteMode.Strict,
+            IsEssential = true,
+            MaxAge = TimeSpan.FromHours(12),
+            Path = path
+        });
+    }
 }
 
 [Route("stores/{storeId}/events")]

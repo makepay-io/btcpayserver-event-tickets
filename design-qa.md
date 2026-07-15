@@ -64,6 +64,43 @@ final result: passed
 
 ---
 
+# Design QA — event-scoped public scanner v1.5.0
+
+## Scope and evidence
+
+- Live BTCPay test store, event: MakePay Builder Summit 2026.
+- Public route: `/stores/{storeId}/events/{eventSlug}/scanner` after protected-link exchange.
+- Mobile viewport: 390 × 844 CSS pixels.
+- States checked: ready camera, manual entry, invalid ticket result, manual close, five-second auto-close, and reset for the next scan.
+
+## Findings
+
+- The old global admin scanner and dashboard-level scanner action are removed. Every event row exposes its own public scanner link and a protected rotation action.
+- The scanner is a standalone, mobile-first page with no BTCPay admin navigation, analytics, or indexable content.
+- Event identity, schedule, venue, camera target, gate/lane context, manual entry, photo fallback, and enforced BTCPay/MakePay attribution remain usable at the mobile breakpoint.
+- Long event names wrap to two lines instead of being truncated outside the usable header area.
+- Invalid codes show a focused, inert-background rejection dialog without attendee data. Manual close immediately returns focus and camera readiness; the configured five-second timer also closes and prepares the next scan.
+- The camera is unmounted while a result is displayed and remounted only after close, preventing a second attendee's QR from being consumed behind the dialog.
+- Wrong-event, revoked, duplicate, expired-access, and successful check-in behavior is covered by automated tests without mutating live paid-ticket data during visual QA.
+
+## Security and operational verification
+
+- Protected scanner links exchange into a renewable, HttpOnly, Secure, SameSite-Strict, event-path-scoped session and redirect to a token-free URL.
+- Rotating an event scanner link invalidates both the former capability and its derived scanner sessions.
+- Check-ins are event-isolated; wrong-event and unknown results do not disclose attendee data and rejected scans do not rewrite ticket storage.
+- Scanner pages use antiforgery-protected same-origin POSTs, no-store/noindex/frame-deny headers, bounded inputs, and no public API key.
+
+## Validation
+
+- Release tests with Razor compilation: 99 passed, 0 failed.
+- Live plugin startup: `BTCPayServer.Plugins.MakePay.EventTickets - 1.5.0.0`.
+- In-app Browser console: no application warnings or errors.
+- The only build advisory is the pre-existing upstream BTCPay Server MailKit 4.8.0 NU1902 warning.
+
+final result: passed
+
+---
+
 # Design QA — Digital Products parity and public experience v1.4.0
 
 ## Evidence

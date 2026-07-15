@@ -1,0 +1,175 @@
+@inject BTCPayServer.Security.ContentSecurityPolicies Csp
+@model EventScannerViewModel
+@using System.Text.Json
+@{
+    Layout = null;
+    Csp.UnsafeEval();
+    Csp.Add("worker-src", "blob:");
+    var faviconUrl = Uri.TryCreate(Model.Settings.FaviconUrl, UriKind.Absolute, out var faviconUri) &&
+        (faviconUri.Scheme == Uri.UriSchemeHttp || faviconUri.Scheme == Uri.UriSchemeHttps)
+            ? Model.Settings.FaviconUrl
+            : null;
+    var scannerConfig = JsonSerializer.Serialize(new
+    {
+        checkInUrl = Model.CheckInUrl,
+        eventUrl = Model.EventUrl,
+        eventKey = $"{Model.StoreId}:{Model.Event.Id}",
+        autoCloseSeconds = Model.Settings.ScannerResultSeconds
+    });
+}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+    <meta name="referrer" content="no-referrer">
+    <meta name="robots" content="noindex,nofollow,noarchive">
+    <meta name="theme-color" content="#08111f">
+    <title>@Model.Event.Name scanner</title>
+    @if (faviconUrl is not null) { <link rel="icon" href="@faviconUrl"> }
+    <link href="~/vendor/vue-qrcode-reader/vue-qrcode-reader.css" rel="stylesheet" asp-append-version="true">
+    <style>
+        :root{--scan-accent:@Model.Settings.AccentColor;--scan-accent-text:@Model.Settings.AccentTextColor;--scan-bg:#08111f;--scan-panel:#101b2d;--scan-border:#26354d;--scan-text:#f8fafc;--scan-muted:#a8b3c5;--scan-success:#12b76a;--scan-danger:#f04438;--scan-warning:#f79009;--scan-safe-top:env(safe-area-inset-top,0px);--scan-safe-bottom:env(safe-area-inset-bottom,0px);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+        *{box-sizing:border-box}html,body{min-height:100%;margin:0;background:var(--scan-bg);color:var(--scan-text)}body{font:16px/1.45 var(--scan-font,inherit);-webkit-font-smoothing:antialiased}button,input{font:inherit}button{touch-action:manipulation}[v-cloak]{display:none!important}
+        .scan-app{min-height:100svh;display:flex;flex-direction:column;padding:calc(14px + var(--scan-safe-top)) 14px calc(16px + var(--scan-safe-bottom));background:radial-gradient(circle at 50% -20%,#1c3358 0,transparent 46%),var(--scan-bg)}
+        .scan-shell{display:flex;flex:1;min-height:0;flex-direction:column}
+        .scan-header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;width:min(100%,560px);margin:0 auto 14px}.scan-brand{min-width:0;flex:1}.scan-kicker{margin:0 0 2px;color:#8fb3ff;font-size:.68rem;font-weight:850;letter-spacing:.13em;text-transform:uppercase}.scan-header h1{display:-webkit-box;margin:0;font-size:clamp(1.12rem,5vw,1.42rem);line-height:1.2;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2}.scan-meta{margin:4px 0 0;color:var(--scan-muted);font-size:.76rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.scan-status{display:inline-flex;align-items:center;gap:6px;flex:none;min-height:32px;border:1px solid var(--scan-border);border-radius:999px;background:rgba(255,255,255,.04);padding:6px 10px;color:var(--scan-muted);font-size:.7rem;font-weight:750}.scan-status::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--scan-success);box-shadow:0 0 0 4px rgba(18,183,106,.12)}.scan-status.is-offline::before{background:var(--scan-danger);box-shadow:0 0 0 4px rgba(240,68,56,.12)}
+        .scan-main{display:flex;flex:1;flex-direction:column;width:min(100%,560px);margin:0 auto;min-height:0}.scan-camera{position:relative;isolation:isolate;min-height:min(58svh,620px);border:1px solid var(--scan-border);border-radius:24px;background:#02060d;overflow:hidden;box-shadow:0 22px 50px rgba(0,0,0,.34)}.scan-camera .wrapper,.scan-camera .qrcode-stream-wrapper,.scan-camera video,.scan-camera canvas{width:100%!important;height:100%!important;min-height:min(58svh,620px);object-fit:cover}.scan-camera video{display:block}.scan-camera-overlay{position:absolute;z-index:2;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,.28),transparent 25%,transparent 72%,rgba(0,0,0,.55))}.scan-target{position:relative;width:min(68vw,310px);aspect-ratio:1;border-radius:24px;box-shadow:0 0 0 999px rgba(2,6,13,.34)}.scan-target::before,.scan-target::after,.scan-target span::before,.scan-target span::after{content:"";position:absolute;width:54px;height:54px;border-color:#fff;border-style:solid;filter:drop-shadow(0 2px 5px rgba(0,0,0,.35))}.scan-target::before{left:0;top:0;border-width:4px 0 0 4px;border-radius:20px 0 0}.scan-target::after{right:0;top:0;border-width:4px 4px 0 0;border-radius:0 20px 0 0}.scan-target span::before{left:0;bottom:0;border-width:0 0 4px 4px;border-radius:0 0 0 20px}.scan-target span::after{right:0;bottom:0;border-width:0 4px 4px 0;border-radius:0 0 20px}.scan-hint{position:absolute;bottom:22px;margin:0;border-radius:999px;background:rgba(3,10,21,.74);backdrop-filter:blur(8px);padding:8px 13px;color:#fff;font-size:.76rem;font-weight:750}
+        .scan-camera-error{position:absolute;z-index:4;inset:0;display:grid;place-items:center;padding:28px;background:#08111f;text-align:center}.scan-camera-error strong{display:block;font-size:1.12rem;margin-bottom:7px}.scan-camera-error p{max-width:340px;margin:0 auto 18px;color:var(--scan-muted)}.scan-primary,.scan-secondary{display:inline-flex;align-items:center;justify-content:center;min-height:50px;border-radius:12px;padding:12px 18px;font-weight:800;text-decoration:none;cursor:pointer}.scan-primary{border:1px solid var(--scan-accent);background:var(--scan-accent);color:var(--scan-accent-text)}.scan-secondary{border:1px solid var(--scan-border);background:var(--scan-panel);color:var(--scan-text)}.scan-primary:disabled{opacity:.48;cursor:wait}
+        .scan-controls{display:grid;gap:10px;margin-top:12px}.scan-setup{border:1px solid var(--scan-border);border-radius:16px;background:var(--scan-panel);overflow:hidden}.scan-setup summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:11px 14px;cursor:pointer;font-size:.82rem;font-weight:780;list-style:none}.scan-setup summary::-webkit-details-marker{display:none}.scan-gate-chip{max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-radius:999px;background:rgba(143,179,255,.1);padding:5px 9px;color:#a9c5ff;font-size:.7rem}.scan-setup-body{display:grid;gap:12px;border-top:1px solid var(--scan-border);padding:14px}.scan-label{display:block;margin-bottom:6px;color:var(--scan-muted);font-size:.72rem;font-weight:780}.scan-input{width:100%;min-height:48px;border:1px solid #40506a;border-radius:11px;background:#08111f;color:var(--scan-text);padding:11px 13px;outline:none}.scan-input:focus{border-color:var(--scan-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--scan-accent) 28%,transparent)}.scan-manual-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px}.scan-fallback{padding:12px;border:1px dashed #40506a;border-radius:12px;color:var(--scan-muted);font-size:.76rem}.scan-fallback input{max-width:100%}.scan-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:auto;padding:16px 3px 0;color:var(--scan-muted);font-size:.68rem}.scan-footer a{color:#bcd0f6;text-decoration:none}
+        .scan-result-backdrop{position:fixed;z-index:50;inset:0;display:flex;align-items:flex-end;justify-content:center;background:rgba(2,6,13,.76);backdrop-filter:blur(7px);padding:18px 14px calc(18px + var(--scan-safe-bottom))}.scan-result{width:min(100%,520px);border:1px solid var(--scan-border);border-radius:26px;background:#f8fafc;color:#101828;padding:24px;box-shadow:0 30px 90px rgba(0,0,0,.55);animation:scan-rise .18s ease-out}.scan-result-mark{display:grid;place-items:center;width:62px;height:62px;border-radius:50%;margin-bottom:17px;background:#dcfae6;color:#067647;font-size:2rem;font-weight:900}.scan-result.is-error .scan-result-mark{background:#fee4e2;color:#b42318}.scan-result.is-warning .scan-result-mark{background:#fef0c7;color:#b54708}.scan-result-kicker{margin:0 0 4px;color:#667085;font-size:.68rem;font-weight:850;letter-spacing:.13em;text-transform:uppercase}.scan-result h2{margin:0;font-size:clamp(1.75rem,8vw,2.25rem);line-height:1.08;letter-spacing:-.035em}.scan-result-message{margin:8px 0 0;color:#667085}.scan-person{margin-top:20px;border:1px solid #d0d5dd;border-radius:15px;background:#fff;padding:16px}.scan-person strong{display:block;font-size:1.25rem}.scan-person span{display:block;margin-top:3px;color:#667085}.scan-result-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 0}.scan-result-meta div{border-radius:12px;background:#eef2f6;padding:11px}.scan-result-meta small{display:block;color:#667085;font-size:.65rem;font-weight:800;text-transform:uppercase}.scan-result-meta b{display:block;margin-top:3px;font-size:.8rem;overflow-wrap:anywhere}.scan-next{margin:16px 0 0;color:#667085;text-align:center;font-size:.76rem;min-height:1.15em}.scan-result .scan-primary{width:100%;margin-top:10px}.scan-live{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+        @@keyframes scan-rise{from{transform:translateY(18px);opacity:.4}to{transform:none;opacity:1}}
+        @@media(min-width:700px){.scan-app{padding-left:24px;padding-right:24px}.scan-camera{min-height:min(66svh,650px)}.scan-camera .wrapper,.scan-camera .qrcode-stream-wrapper,.scan-camera video,.scan-camera canvas{min-height:min(66svh,650px)}.scan-result-backdrop{align-items:center}.scan-footer{padding-top:20px}}
+        @@media(max-width:360px){.scan-app{padding-left:10px;padding-right:10px}.scan-camera{border-radius:19px}.scan-target{width:220px}.scan-manual-row{grid-template-columns:1fr}.scan-result{padding:20px}.scan-result-meta{grid-template-columns:1fr}}
+        @@media(prefers-reduced-motion:reduce){.scan-result{animation:none}}
+    </style>
+</head>
+<body>
+<div id="event-scanner" class="scan-app" v-cloak>
+    <div class="scan-shell" ref="scanShell">
+    <header class="scan-header">
+        <div class="scan-brand">
+            <p class="scan-kicker">Event check-in</p>
+            <h1>@Model.Event.Name</h1>
+            <p class="scan-meta">@Model.Event.StartsAt.ToString("dd MMM yyyy · HH:mm") · @Model.Event.VenueName</p>
+        </div>
+        <span class="scan-status" :class="{'is-offline':!online}">{{ online ? 'Ready' : 'Offline' }}</span>
+    </header>
+
+    <main class="scan-main" ref="scannerMain" tabindex="-1">
+        <section class="scan-camera" aria-label="Ticket QR camera">
+            <qrcode-stream v-if="cameraMounted" :camera="cameraMode" v-on:decode="onDecode" v-on:init="onCameraInit"></qrcode-stream>
+            <div class="scan-camera-overlay" aria-hidden="true">
+                <div class="scan-target"><span></span></div>
+                <p class="scan-hint">Point at the ticket QR code</p>
+            </div>
+            <div class="scan-camera-error" v-if="cameraError">
+                <div><strong>Camera unavailable</strong><p>{{ cameraError }}</p><button class="scan-primary" type="button" v-on:click="retryCamera">Try camera again</button></div>
+            </div>
+        </section>
+
+        <div class="scan-controls">
+            <details class="scan-setup">
+                <summary><span>Scanner setup &amp; manual entry</span><span class="scan-gate-chip">{{ gate || 'No gate set' }}</span></summary>
+                <div class="scan-setup-body">
+                    <label><span class="scan-label">Gate / lane</span><input class="scan-input" v-model.trim="gate" maxlength="80" placeholder="Main entrance" v-on:change="saveGate"></label>
+                    <div>
+                        <label class="scan-label" for="manual-code">Enter ticket code</label>
+                        <div class="scan-manual-row"><input id="manual-code" ref="manualCode" class="scan-input" v-model.trim="manualCode" maxlength="180" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="TKT-…" v-on:keyup.enter="submitManual"><button class="scan-primary" type="button" :disabled="busy || !manualCode" v-on:click="submitManual">Check ticket</button></div>
+                    </div>
+                    <div class="scan-fallback" v-if="captureFallback"><strong>Scan from a photo</strong><br>Your browser cannot use a live camera stream. Choose a saved ticket QR image instead.<qrcode-capture v-on:decode="onDecode"></qrcode-capture></div>
+                </div>
+            </details>
+        </div>
+
+        <footer class="scan-footer"><span>Powered by BTCPay Server · ✦ MakePay</span><a href="@Model.EventUrl">Exit scanner</a></footer>
+    </main>
+    </div>
+
+    <div class="scan-result-backdrop" v-if="resultOpen" v-on:click.self="closeResult" v-on:keydown.esc.prevent="closeResult">
+        <section class="scan-result" :class="resultClass" role="dialog" aria-modal="true" aria-labelledby="scan-result-title" aria-describedby="scan-result-message">
+            <div class="scan-result-mark" aria-hidden="true">{{ resultIcon }}</div>
+            <p class="scan-result-kicker">{{ resultKicker }}</p>
+            <h2 id="scan-result-title">{{ resultTitle }}</h2>
+            <p class="scan-result-message" id="scan-result-message">{{ result.message }}</p>
+            <div class="scan-person" v-if="result.attendee"><strong>{{ result.attendee }}</strong><span>{{ result.ticketType || 'Event ticket' }}</span></div>
+            <div class="scan-result-meta" v-if="result.checkedInAt || gate">
+                <div v-if="result.checkedInAt"><small>{{ result.status === 'duplicate' ? 'Originally checked in' : 'Checked in' }}</small><b>{{ formatTime(result.checkedInAt) }}</b></div>
+                <div v-if="gate"><small>Gate / lane</small><b>{{ gate }}</b></div>
+            </div>
+            <p class="scan-next" aria-live="polite">{{ countdownText }}</p>
+            <button ref="closeResult" class="scan-primary" type="button" v-on:click="fatal ? exitScanner() : closeResult">{{ fatal ? 'Exit scanner' : 'Close · scan next' }}</button>
+        </section>
+    </div>
+    <div class="scan-live" aria-live="assertive">{{ liveAnnouncement }}</div>
+    @Html.AntiForgeryToken()
+</div>
+<script src="~/vendor/vuejs/vue.min.js" asp-append-version="true"></script>
+<script src="~/vendor/vue-qrcode-reader/VueQrcodeReader.umd.min.js" asp-append-version="true"></script>
+<script>
+(() => {
+    const config = @Html.Raw(scannerConfig);
+    const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+    const gateStorageKey = `makepay:event-scanner:${config.eventKey}:gate`;
+    new Vue({
+        el:'#event-scanner',
+        data(){return{online:navigator.onLine,cameraMounted:true,cameraMode:'auto',cameraError:'',captureFallback:false,busy:false,resultOpen:false,fatal:false,result:{},manualCode:'',gate:'',autoCloseTimer:null,countdownTimer:null,remainingSeconds:0,liveAnnouncement:''}},
+        computed:{
+            resultClass(){return this.result.success?'is-success':this.result.status==='duplicate'?'is-warning':'is-error'},
+            resultIcon(){return this.result.success?'✓':this.result.status==='duplicate'?'!':'×'},
+            resultKicker(){return this.result.success?'Check-in complete':this.result.status==='duplicate'?'Attention':'Ticket rejected'},
+            resultTitle(){return{checked_in:'Valid ticket',duplicate:'Already checked in',wrong_event:'Wrong event',revoked:'Ticket revoked',unauthorized:'Scanner access expired',missing:'Enter a ticket code',network_error:'Connection problem'}[this.result.status]||'Ticket not valid'},
+            countdownText(){return this.fatal?'Reopen this event’s protected scanner link to continue.':this.remainingSeconds>0?`Ready for next scan in ${this.remainingSeconds}s`:config.autoCloseSeconds===0&&this.resultOpen?'Close when you are ready to scan the next ticket.':''}
+        },
+        mounted(){
+            try{this.gate=localStorage.getItem(gateStorageKey)||''}catch{}
+            addEventListener('online',this.updateOnline);addEventListener('offline',this.updateOnline);addEventListener('pagehide',this.stopCamera);document.addEventListener('visibilitychange',this.onVisibilityChange);addEventListener('keydown',this.onKeyDown);
+        },
+        beforeDestroy(){this.clearResultTimers();removeEventListener('online',this.updateOnline);removeEventListener('offline',this.updateOnline);removeEventListener('pagehide',this.stopCamera);document.removeEventListener('visibilitychange',this.onVisibilityChange);removeEventListener('keydown',this.onKeyDown)},
+        methods:{
+            updateOnline(){this.online=navigator.onLine},
+            saveGate(){try{localStorage.setItem(gateStorageKey,this.gate)}catch{}},
+            stopCamera(){this.cameraMode='off';this.cameraMounted=false},
+            resumeCamera(){if(this.fatal||document.hidden)return;this.cameraError='';this.captureFallback=false;this.cameraMode='off';this.cameraMounted=false;this.$nextTick(()=>{this.cameraMounted=true;this.cameraMode='auto'})},
+            onVisibilityChange(){if(document.hidden)this.stopCamera();else if(!this.resultOpen)this.resumeCamera()},
+            onKeyDown(event){if(event.key==='Escape'&&this.resultOpen){event.preventDefault();this.closeResult()}},
+            async onCameraInit(promise){
+                try{await promise;this.cameraError='';this.captureFallback=false}
+                catch(error){this.cameraMode='off';this.captureFallback=true;this.cameraError={NotAllowedError:'Allow camera access in your browser settings, then try again.',NotFoundError:'No camera was found on this device.',NotSupportedError:'Camera scanning requires a secure HTTPS connection.',NotReadableError:'The camera is already in use by another app.',OverconstrainedError:'The rear camera could not be selected.',StreamApiNotSupportedError:'Live camera scanning is not supported by this browser.'}[error?.name]||'The camera could not be started. Use manual entry or scan a saved ticket image below.'}
+            },
+            retryCamera(){this.resumeCamera()},
+            onDecode(value){const code=typeof value==='string'?value.trim():'';if(!code||this.busy||this.resultOpen)return;this.checkCode(code,false)},
+            submitManual(){const code=this.manualCode.trim();if(!code||this.busy||this.resultOpen)return;this.checkCode(code,true)},
+            async checkCode(code,manual){
+                this.stopCamera();
+                if(!this.online){this.showResult({success:false,status:'network_error',message:'This device is offline. Reconnect and try again.'});return}
+                this.busy=true;
+                try{
+                    const response=await fetch(config.checkInUrl,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','RequestVerificationToken':token,'X-MakePay-Scanner':'1'},body:JSON.stringify({code,gate:this.gate||null})});
+                    const result=await response.json().catch(()=>({success:false,status:'network_error',message:'The scanner received an unexpected response.'}));
+                    if(manual&&result.success)this.manualCode='';
+                    this.showResult(result);
+                }catch{this.showResult({success:false,status:'network_error',message:'Could not reach the server. Keep the ticket nearby and try again.'})}
+                finally{this.busy=false}
+            },
+            showResult(result){
+                this.clearResultTimers();this.stopCamera();this.result=result||{success:false,status:'not_found',message:'Ticket not found for this event.'};this.fatal=this.result.status==='unauthorized';this.resultOpen=true;this.liveAnnouncement=`${this.resultTitle}. ${this.result.message||''}`;
+                this.$refs.scanShell?.setAttribute('inert','');this.$refs.scanShell?.setAttribute('aria-hidden','true');
+                if(navigator.vibrate)navigator.vibrate(this.result.success?[120]:[80,60,80]);
+                this.$nextTick(()=>this.$refs.closeResult?.focus());
+                if(!this.fatal&&config.autoCloseSeconds>0){
+                    this.remainingSeconds=config.autoCloseSeconds;
+                    this.countdownTimer=setInterval(()=>{this.remainingSeconds=Math.max(0,this.remainingSeconds-1)},1000);
+                    this.autoCloseTimer=setTimeout(()=>this.closeResult(),config.autoCloseSeconds*1000);
+                }
+            },
+            clearResultTimers(){if(this.autoCloseTimer)clearTimeout(this.autoCloseTimer);if(this.countdownTimer)clearInterval(this.countdownTimer);this.autoCloseTimer=null;this.countdownTimer=null;this.remainingSeconds=0},
+            closeResult(){if(this.fatal)return;this.clearResultTimers();this.resultOpen=false;this.result={};this.$refs.scanShell?.removeAttribute('inert');this.$refs.scanShell?.removeAttribute('aria-hidden');this.liveAnnouncement='Ready for the next ticket.';this.resumeCamera();this.$nextTick(()=>this.$refs.scannerMain?.focus({preventScroll:true}))},
+            exitScanner(){window.location.assign(config.eventUrl)},
+            formatTime(value){const date=new Date(value);return Number.isNaN(date.getTime())?'':date.toLocaleString([], {dateStyle:'medium',timeStyle:'short'})}
+        }
+    });
+})();
+</script>
+</body>
+</html>
