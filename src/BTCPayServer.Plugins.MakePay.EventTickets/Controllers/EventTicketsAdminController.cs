@@ -26,8 +26,10 @@ public sealed class EventTicketsAdminController(
     public async Task<IActionResult> Index(string storeId)
     {
         var store = await stores.FindStore(storeId); if (store is null) return NotFound();
+        var events = await repository.GetEventsWithScannerAccess(storeId);
+        var scannerAccessTokens = events.ToDictionary(item => item.Id, secrets.EnsureScannerAccessToken, StringComparer.OrdinalIgnoreCase);
         ViewData.SetActivePage("EventTickets", "Event Tickets", "Event Tickets");
-        return View("~/Views/EventTickets/Index.cshtml", new EventTicketsDashboardViewModel { StoreId = storeId, Settings = await repository.GetSettings(storeId), Events = await repository.GetEvents(storeId), Orders = (await repository.GetOrders(storeId)).Take(100).ToList(), Tickets = await repository.GetTickets(storeId), MappedBaseUrl = await eventApps.GetMappedBaseUrl(storeId) });
+        return View("~/Views/EventTickets/Index.cshtml", new EventTicketsDashboardViewModel { StoreId = storeId, Settings = await repository.GetSettings(storeId), Events = events, Orders = (await repository.GetOrders(storeId)).Take(100).ToList(), Tickets = await repository.GetTickets(storeId), ScannerAccessTokens = scannerAccessTokens, MappedBaseUrl = await eventApps.GetMappedBaseUrl(storeId) });
     }
     [HttpGet("events/new")][HttpGet("events/{eventId}")]
     public async Task<IActionResult> Event(string storeId, string? eventId)
@@ -38,12 +40,25 @@ public sealed class EventTicketsAdminController(
     public async Task<IActionResult> SaveEvent(string storeId, string eventId, TicketEvent posted)
     {
         var existing = eventId == "new" ? null : await repository.GetEvent(storeId, eventId); posted.Id = existing?.Id ?? Guid.NewGuid().ToString("N"); posted.CreatedAt = existing?.CreatedAt ?? DateTimeOffset.UtcNow;
+        posted.ProtectedScannerAccessToken = existing?.ProtectedScannerAccessToken;
+        posted.ScannerAccessTokenHash = existing?.ScannerAccessTokenHash;
         posted.TicketTypes = posted.TicketTypes.Where(t => !string.IsNullOrWhiteSpace(t.Name)).ToList(); foreach (var type in posted.TicketTypes) if (string.IsNullOrWhiteSpace(type.Id)) type.Id = Guid.NewGuid().ToString("N");
         if (posted.EndsAt <= posted.StartsAt) ModelState.AddModelError(nameof(posted.EndsAt), "Event end must be after its start."); if (posted.TicketTypes.Count == 0) ModelState.AddModelError(nameof(posted.TicketTypes), "Add at least one ticket type.");
         try { TimeZoneInfo.FindSystemTimeZoneById(posted.TimeZoneId); } catch { ModelState.AddModelError(nameof(posted.TimeZoneId), "Unknown time zone identifier."); }
         if (!ModelState.IsValid) { ViewData["StoreId"] = storeId; return View("~/Views/EventTickets/Event.cshtml", posted); }
         try { await repository.SaveEvent(storeId, posted); } catch (InvalidOperationException ex) { ModelState.AddModelError(nameof(posted.Slug), ex.Message); ViewData["StoreId"] = storeId; return View("~/Views/EventTickets/Event.cshtml", posted); }
         TempData.SetStatusMessageModel(new() { Severity = StatusMessageModel.StatusSeverity.Success, Message = "Event saved." }); return RedirectToAction(nameof(Index), new { storeId });
+    }
+    [HttpPost("events/{eventId}/scanner/rotate")]
+    public async Task<IActionResult> RotateScanner(string storeId, string eventId)
+    {
+        if (!await repository.RotateScannerAccess(storeId, eventId)) return NotFound();
+        TempData.SetStatusMessageModel(new()
+        {
+            Severity = StatusMessageModel.StatusSeverity.Success,
+            Message = "Scanner access rotated. Previous scanner links and sessions no longer work."
+        });
+        return RedirectToAction(nameof(Index), new { storeId });
     }
     [HttpGet("settings")]
     public async Task<IActionResult> Settings(string storeId)
@@ -76,15 +91,6 @@ public sealed class EventTicketsAdminController(
         await repository.SaveSettings(storeId, posted);
         TempData.SetStatusMessageModel(new() { Severity = StatusMessageModel.StatusSeverity.Success, Message = "Event ticket settings saved." }); return RedirectToAction(nameof(Settings), new { storeId });
     }
-    [HttpGet("scanner")]
-    public IActionResult Scanner(string storeId) { ViewData["StoreId"] = storeId; return View("~/Views/EventTickets/Scanner.cshtml"); }
-    [HttpPost("scanner/check-in")]
-    public async Task<IActionResult> CheckIn(string storeId, [FromBody] ScannerRequest request)
-    {
-        if (string.IsNullOrWhiteSpace(request.Code)) return BadRequest(new CheckInResult(false, "missing", null, null, null, null, "Scan or enter a ticket code.")); var result = await repository.CheckIn(storeId, request.Code, User.Identity?.Name ?? "BTCPay staff", request.Gate); return result.Success ? Ok(result) : Conflict(result);
-    }
-    public sealed record ScannerRequest(string Code, string? Gate);
-
     private async Task SetSettingsViewData(string storeId)
     {
         ViewData["StoreId"] = storeId;

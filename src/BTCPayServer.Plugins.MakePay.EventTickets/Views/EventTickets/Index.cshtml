@@ -33,7 +33,6 @@
         </div>
         <div class="mp-admin-actions">
             <a class="btn btn-secondary" target="_blank" rel="noopener noreferrer" href="@storefrontUrl"><svg class="mp-admin-icon" aria-hidden="true"><use href="@($"{iconSpriteUrl}#actions-show")"></use></svg>View store</a>
-            <a class="btn btn-secondary" asp-action="Scanner" asp-route-storeId="@Model.StoreId"><svg class="mp-admin-icon" aria-hidden="true"><use href="@($"{iconSpriteUrl}#qr-code")"></use></svg>Open scanner</a>
             <a class="btn btn-secondary" asp-action="Settings" asp-route-storeId="@Model.StoreId"><svg class="mp-admin-icon" aria-hidden="true"><use href="@($"{iconSpriteUrl}#settings")"></use></svg>Store settings</a>
             <a class="btn btn-primary" asp-action="Event" asp-route-storeId="@Model.StoreId"><svg class="mp-admin-icon" aria-hidden="true"><use href="@($"{iconSpriteUrl}#actions-add")"></use></svg>Add event</a>
         </div>
@@ -72,6 +71,10 @@
                         var eventUrl = Model.MappedBaseUrl is null
                             ? Url.Action("Event", "EventTicketsPublic", new { storeId = Model.StoreId, eventId = item.Slug })
                             : Model.MappedBaseUrl + TicketPublicUrl.EventPath(true, Model.StoreId, item.Slug);
+                        var scannerToken = Model.ScannerAccessTokens.GetValueOrDefault(item.Id);
+                        var scannerUrl = Model.MappedBaseUrl is null
+                            ? Url.Action("Scanner", "EventTicketsPublic", new { storeId = Model.StoreId, eventId = item.Slug, scannerToken })
+                            : Model.MappedBaseUrl + TicketPublicUrl.ScannerPath(true, Model.StoreId, item.Slug, scannerToken);
                         var posUrl = eventUrl + "/pos";
                         var sold = Model.Tickets.Count(ticket => ticket.EventId == item.Id);
                         var saleable = TicketEventSalePolicy.CanStartCheckout(item, now);
@@ -100,7 +103,7 @@
                             <td><span class="small">@item.TicketTypes.Count(type => type.Active) active</span><div class="small text-muted">@item.TicketTypes.Count total</div></td>
                             <td><strong>@sold</strong></td>
                             <td><span class="mp-badge @statusClass">@statusLabel</span></td>
-                            <td><div class="mp-row-actions">@if (saleable) { <a class="btn btn-sm btn-secondary" target="_blank" rel="noopener noreferrer" href="@eventUrl">View</a><a class="btn btn-sm btn-secondary" target="_blank" rel="noopener noreferrer" href="@posUrl">POS</a> } else { <a class="btn btn-sm btn-secondary" target="_blank" rel="noopener noreferrer" href="@storefrontUrl">Store</a> }<a class="btn btn-sm btn-secondary" asp-action="Event" asp-route-storeId="@Model.StoreId" asp-route-eventId="@item.Id">Edit</a></div></td>
+                            <td><div class="mp-row-actions">@if (saleable) { <a class="btn btn-sm btn-secondary" target="_blank" rel="noopener noreferrer" href="@eventUrl">View</a><a class="btn btn-sm btn-secondary" target="_blank" rel="noopener noreferrer" href="@posUrl">POS</a> } else { <a class="btn btn-sm btn-secondary" target="_blank" rel="noopener noreferrer" href="@storefrontUrl">Store</a> }<a class="btn btn-sm btn-secondary" target="_blank" rel="noopener noreferrer" href="@scannerUrl" aria-label="Open @item.Name scanner">Scanner</a><form method="post" asp-action="RotateScanner" asp-route-storeId="@Model.StoreId" asp-route-eventId="@item.Id" onsubmit="return confirm('Rotate this scanner link? Staff using the previous link will lose access.');"><button class="btn btn-sm btn-secondary" type="submit" aria-label="Rotate @item.Name scanner access" title="Invalidate previous scanner links">Rotate</button></form><a class="btn btn-sm btn-secondary" asp-action="Event" asp-route-storeId="@Model.StoreId" asp-route-eventId="@item.Id">Edit</a></div></td>
                         </tr>
                     }
                 </tbody>

@@ -123,6 +123,14 @@ public static class TicketPublicUrl
     public static string EventPath(bool clean, string storeId, string eventSlug) =>
         PublicPath(clean, storeId, Uri.EscapeDataString(eventSlug));
 
+    public static string ScannerPath(bool clean, string storeId, string eventSlug, string? scannerToken = null)
+    {
+        var path = EventPath(clean, storeId, eventSlug) + "/scanner";
+        return string.IsNullOrWhiteSpace(scannerToken)
+            ? path
+            : path + "?scannerToken=" + Uri.EscapeDataString(scannerToken);
+    }
+
     public static string OrderPath(bool clean, string storeId, string orderId, string? accessToken = null)
     {
         var path = PublicPath(clean, storeId, $"order/{Uri.EscapeDataString(orderId)}");

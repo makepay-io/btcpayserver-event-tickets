@@ -14,7 +14,10 @@ public sealed class ExperienceParityTests
     private static readonly string Countdown = Source("Views", "EventTickets", "Public", "_Countdown.cshtml");
     private static readonly string Order = Source("Views", "EventTickets", "Public", "Order.cshtml");
     private static readonly string Footer = Source("Views", "EventTickets", "Public", "_Footer.cshtml");
+    private static readonly string Scanner = Source("Views", "EventTickets", "Public", "Scanner.cshtml");
     private static readonly string Repository = Source("Services", "EventTicketRepository.cs");
+    private static readonly string TicketCodes = Source("Services", "TicketCodeService.cs");
+    private static readonly string AdminController = Source("Controllers", "EventTicketsAdminController.cs");
     private static readonly string PublicController = Source("Controllers", "EventTicketsPublicController.cs");
 
     [Fact]
@@ -25,7 +28,7 @@ public sealed class ExperienceParityTests
 
         Assert.Contains("Events", AdminDashboard, StringComparison.Ordinal);
         Assert.Contains("Recent orders", AdminDashboard, StringComparison.Ordinal);
-        Assert.Contains("asp-action=\"Scanner\"", AdminDashboard, StringComparison.Ordinal);
+        Assert.DoesNotContain("asp-action=\"Scanner\"", AdminDashboard, StringComparison.Ordinal);
         Assert.Contains("asp-action=\"Settings\"", AdminDashboard, StringComparison.Ordinal);
         Assert.Contains("asp-action=\"Event\"", AdminDashboard, StringComparison.Ordinal);
         Assert.Contains("Add event", AdminDashboard, StringComparison.Ordinal);
@@ -44,8 +47,30 @@ public sealed class ExperienceParityTests
         Assert.Contains("On sale", AdminDashboard, StringComparison.Ordinal);
         Assert.Contains("Ended", AdminDashboard, StringComparison.Ordinal);
         Assert.Contains("TicketEventSalePolicy.CanStartCheckout", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("Model.ScannerAccessTokens", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("TicketPublicUrl.ScannerPath", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("scannerToken", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains(">Scanner</a>", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("asp-action=\"RotateScanner\"", AdminDashboard, StringComparison.Ordinal);
         Assert.DoesNotMatch(new Regex(@"\.mp-admin-dashboard\{[^}]*overflow-x\s*:\s*hidden",
             RegexOptions.CultureInvariant), AdminDashboard);
+    }
+
+    [Fact]
+    public void Scanner_is_an_event_scoped_capability_link_not_an_admin_or_global_route()
+    {
+        Assert.Contains("GetEventsWithScannerAccess(storeId)", AdminController, StringComparison.Ordinal);
+        Assert.Contains("ToDictionary(item => item.Id, secrets.EnsureScannerAccessToken", AdminController,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("IActionResult Scanner(string storeId", AdminController, StringComparison.Ordinal);
+
+        var publicUrls = Source("Services", "TicketPublicUrl.cs");
+        Assert.Contains("ScannerPath(bool clean, string storeId, string eventSlug, string? scannerToken = null)",
+            publicUrls, StringComparison.Ordinal);
+        Assert.Contains("EventPath(clean, storeId, eventSlug) + \"/scanner\"", publicUrls,
+            StringComparison.Ordinal);
+        Assert.Contains("\"?scannerToken=\" + Uri.EscapeDataString(scannerToken)", publicUrls,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -105,7 +130,7 @@ public sealed class ExperienceParityTests
             "HeroHeadline", "HeroImageUrl", "HeroSubheadline", "LogoUrl", "MutedColor",
             "PageBackgroundColor", "PrivacyUrl", "PromoCode", "PromoDescription", "PromoPercent",
             "RequireAnalyticsConsent", "RequireCountry", "RequirePhone", "ResendFrom", "RespectDoNotTrack",
-            "ShowCountdown", "StorefrontDescription", "StorefrontTitle", "SurfaceColor", "TermsUrl",
+            "ScannerResultSeconds", "ShowCountdown", "StorefrontDescription", "StorefrontTitle", "SurfaceColor", "TermsUrl",
             "TextColor", "TicketPageSubtitle", "TicketPageTitle", "TimerColor", "TimerTextColor"
         };
 
@@ -140,6 +165,91 @@ public sealed class ExperienceParityTests
             .ToArray();
         Assert.NotEmpty(previewStates);
         Assert.Equal(previewStates.Length, previewStates.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public void Scanner_settings_explain_event_scope_and_support_manual_or_timed_close()
+    {
+        Assert.Contains("Event check-in scanner", Settings, StringComparison.Ordinal);
+        Assert.Contains("Each event has its own protected public scanner link", Settings, StringComparison.Ordinal);
+        Assert.Contains("asp-for=\"ScannerResultSeconds\"", Settings, StringComparison.Ordinal);
+        Assert.Contains("min=\"0\"", Settings, StringComparison.Ordinal);
+        Assert.Contains("max=\"60\"", Settings, StringComparison.Ordinal);
+        Assert.Contains("Set to 0", Settings, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Public_scanner_is_mobile_first_and_ready_for_repeated_door_check_ins()
+    {
+        Assert.Contains("Layout = null", Scanner, StringComparison.Ordinal);
+        Assert.Contains("name=\"viewport\"", Scanner, StringComparison.Ordinal);
+        Assert.Contains("viewport-fit=cover", Scanner, StringComparison.Ordinal);
+        Assert.Contains("min-height:100svh", Scanner, StringComparison.Ordinal);
+        Assert.Contains("-webkit-line-clamp:2", Scanner, StringComparison.Ordinal);
+        Assert.Contains("<qrcode-stream", Scanner, StringComparison.Ordinal);
+        Assert.Contains("v-on:decode=\"onDecode\"", Scanner, StringComparison.Ordinal);
+        Assert.Contains("Camera unavailable", Scanner, StringComparison.Ordinal);
+        Assert.Contains("Enter ticket code", Scanner, StringComparison.Ordinal);
+        Assert.Contains("Gate / lane", Scanner, StringComparison.Ordinal);
+
+        Assert.Contains("role=\"dialog\"", Scanner, StringComparison.Ordinal);
+        Assert.Contains("aria-modal=\"true\"", Scanner, StringComparison.Ordinal);
+        Assert.Contains("result.attendee", Scanner, StringComparison.Ordinal);
+        Assert.Contains("result.ticketType", Scanner, StringComparison.Ordinal);
+        Assert.Contains("Valid ticket", Scanner, StringComparison.Ordinal);
+        Assert.Contains("Already checked in", Scanner, StringComparison.Ordinal);
+        Assert.Contains("Wrong event", Scanner, StringComparison.Ordinal);
+        Assert.Contains("Close · scan next", Scanner, StringComparison.Ordinal);
+
+        Assert.Contains("autoCloseSeconds = Model.Settings.ScannerResultSeconds", Scanner, StringComparison.Ordinal);
+        Assert.Contains("if(!this.fatal&&config.autoCloseSeconds>0)", Scanner, StringComparison.Ordinal);
+        Assert.Contains("setTimeout(()=>this.closeResult(),config.autoCloseSeconds*1000)", Scanner,
+            StringComparison.Ordinal);
+        Assert.Contains("this.stopCamera();", Scanner, StringComparison.Ordinal);
+        Assert.Contains("this.resumeCamera();", Scanner, StringComparison.Ordinal);
+        Assert.Contains("this.cameraMounted=false", Scanner, StringComparison.Ordinal);
+        Assert.Contains("setAttribute('inert','')", Scanner, StringComparison.Ordinal);
+        Assert.Contains("addEventListener('pagehide',this.stopCamera)", Scanner, StringComparison.Ordinal);
+        Assert.Contains("document.addEventListener('visibilitychange',this.onVisibilityChange)", Scanner,
+            StringComparison.Ordinal);
+
+        Assert.Contains("@Html.AntiForgeryToken()", Scanner, StringComparison.Ordinal);
+        Assert.Contains("'RequestVerificationToken':token", Scanner, StringComparison.Ordinal);
+        Assert.Contains("credentials:'same-origin'", Scanner, StringComparison.Ordinal);
+        Assert.DoesNotContain("scannerToken", Scanner, StringComparison.Ordinal);
+        Assert.DoesNotContain("_Analytics", Scanner, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Public_scanner_exchanges_the_capability_for_a_path_scoped_session_and_secures_check_in()
+    {
+        var scannerActions = PublicController[
+            PublicController.IndexOf("public async Task<IActionResult> Scanner", StringComparison.Ordinal)..
+            PublicController.IndexOf("private async Task<IActionResult> ShowEvent", StringComparison.Ordinal)];
+
+        Assert.Contains("[HttpGet(\"{eventId}/scanner\")]", PublicController, StringComparison.Ordinal);
+        Assert.Contains("[HttpPost(\"{eventId}/scanner/check-in\")]", PublicController, StringComparison.Ordinal);
+        Assert.True(Regex.Matches(PublicController, "\\[TicketNoStore\\]").Count >= 2);
+        Assert.Contains("TicketCodeService.CanAccessScanner(item, scannerToken)", scannerActions,
+            StringComparison.Ordinal);
+        Assert.Contains("Response.Cookies.Append(TicketCodeService.ScannerSessionCookieName", PublicController,
+            StringComparison.Ordinal);
+        Assert.Contains("HttpOnly = true", PublicController, StringComparison.Ordinal);
+        Assert.Contains("SameSite = SameSiteMode.Strict", PublicController, StringComparison.Ordinal);
+        Assert.Contains("SetScannerSessionCookie(storeId, item.Slug", scannerActions, StringComparison.Ordinal);
+        Assert.Contains("Path = path", PublicController, StringComparison.Ordinal);
+        Assert.Contains("return RedirectPublic(nameof(Scanner)", scannerActions, StringComparison.Ordinal);
+        Assert.Contains("Request.Cookies[TicketCodeService.ScannerSessionCookieName]", scannerActions,
+            StringComparison.Ordinal);
+        Assert.Contains("[ValidateAntiForgeryToken]", PublicController, StringComparison.Ordinal);
+        Assert.Contains("repository.CheckIn(storeId, item", scannerActions, StringComparison.Ordinal);
+        Assert.DoesNotContain("TicketEventSalePolicy.CanStartCheckout", scannerActions, StringComparison.Ordinal);
+
+        Assert.Contains("Referrer-Policy", PublicController, StringComparison.Ordinal);
+        Assert.Contains("noindex, nofollow, noarchive", PublicController, StringComparison.Ordinal);
+        Assert.Contains("X-Frame-Options", PublicController, StringComparison.Ordinal);
+        Assert.Contains("Permissions-Policy", PublicController, StringComparison.Ordinal);
+        Assert.Contains("CryptographicOperations.FixedTimeEquals", TicketCodes, StringComparison.Ordinal);
     }
 
     [Fact]

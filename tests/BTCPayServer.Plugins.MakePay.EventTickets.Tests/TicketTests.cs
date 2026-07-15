@@ -27,6 +27,159 @@ public class TicketTests
     public void ForeignQrPrefixFallsBackToRawValue() => Assert.Equal("hello", TicketCodeService.ExtractCode("hello"));
 
     [Fact]
+    public void ScannerAccessTokenIsRandomProtectedAndComparedInConstantTime()
+    {
+        var codes = new TicketCodeService(new EphemeralDataProtectionProvider());
+        var item = Event();
+
+        var token = codes.EnsureScannerAccessToken(item);
+
+        Assert.NotEmpty(token);
+        Assert.NotEqual(token, item.ProtectedScannerAccessToken);
+        Assert.Equal(TicketCodeService.HashScannerAccessToken(token), item.ScannerAccessTokenHash);
+        Assert.True(TicketCodeService.CanAccessScanner(item, token));
+        Assert.Equal(token, codes.GetScannerAccessToken(item));
+        Assert.Equal(token, codes.EnsureScannerAccessToken(item));
+        Assert.False(TicketCodeService.CanAccessScanner(item, null));
+        Assert.False(TicketCodeService.CanAccessScanner(item, token + "tampered"));
+
+        var rotated = codes.RotateScannerAccessToken(item);
+        Assert.NotEqual(token, rotated);
+        Assert.False(TicketCodeService.CanAccessScanner(item, token));
+        Assert.True(TicketCodeService.CanAccessScanner(item, rotated));
+
+        var source = File.ReadAllText(RepositoryFile(
+            "src", "BTCPayServer.Plugins.MakePay.EventTickets", "Services", "TicketCodeService.cs"));
+        Assert.Contains("CryptographicOperations.FixedTimeEquals(expected, actual)", source,
+            StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(5, true)]
+    [InlineData(60, true)]
+    [InlineData(-1, false)]
+    [InlineData(61, false)]
+    public void ScannerResultDelayDefaultsToFiveSecondsAndAcceptsOnlyConfiguredRange(int seconds, bool valid)
+    {
+        Assert.Equal(5, new EventTicketSettings().ScannerResultSeconds);
+        var settings = new EventTicketSettings { ScannerResultSeconds = seconds };
+        var errors = new List<ValidationResult>();
+
+        Assert.Equal(valid, Validator.TryValidateObject(settings, new ValidationContext(settings), errors, true));
+        if (!valid)
+            Assert.Contains(errors, result => result.MemberNames.Contains(nameof(EventTicketSettings.ScannerResultSeconds)));
+    }
+
+    [Fact]
+    public void ScannerCheckInIsEventScopedAndReturnsHolderAndTicketType()
+    {
+        const string code = "TKT-AAAA-BBBB-CCCC-DDDD";
+        var checkedInAt = new DateTimeOffset(2026, 7, 15, 8, 30, 0, TimeSpan.Zero);
+        var item = Event();
+        var ticket = new IssuedTicket
+        {
+            Id = "ticket-1",
+            EventId = item.Id,
+            TicketTypeId = "vip",
+            AttendeeName = "Ada Lovelace",
+            CodeHash = TicketCodeService.Hash(code)
+        };
+        var tickets = new IssuedTicketCollection { Tickets = { [ticket.Id] = ticket } };
+
+        var result = EventTicketRepository.ApplyCheckIn(tickets, item, code, "door@example.com", " Main gate ", checkedInAt);
+
+        Assert.True(result.Success);
+        Assert.Equal("checked_in", result.Status);
+        Assert.Equal("Ada Lovelace", result.Attendee);
+        Assert.Equal("VIP", result.TicketType);
+        Assert.Equal(checkedInAt, result.CheckedInAt);
+        Assert.Equal(checkedInAt, ticket.CheckedInAt);
+        Assert.Equal("door@example.com", ticket.CheckedInBy);
+        Assert.Equal("Main gate", ticket.CheckInGate);
+
+        var duplicate = EventTicketRepository.ApplyCheckIn(tickets, item, code, "second-door", null, checkedInAt.AddSeconds(1));
+        Assert.False(duplicate.Success);
+        Assert.Equal("duplicate", duplicate.Status);
+        Assert.Equal("Ada Lovelace", duplicate.Attendee);
+        Assert.Equal("VIP", duplicate.TicketType);
+        Assert.Equal(checkedInAt, ticket.CheckedInAt);
+        Assert.Equal("door@example.com", ticket.CheckedInBy);
+    }
+
+    [Fact]
+    public void ScannerRejectsTicketsForAnotherEventWithoutLeakingHolderDataOrMutatingTicket()
+    {
+        const string code = "TKT-AAAA-BBBB-CCCC-DDDD";
+        var requestedEvent = Event();
+        requestedEvent.Id = "other-event";
+        var ticket = new IssuedTicket
+        {
+            Id = "ticket-1",
+            EventId = "event",
+            TicketTypeId = "vip",
+            AttendeeName = "Ada Lovelace",
+            CodeHash = TicketCodeService.Hash(code)
+        };
+        var tickets = new IssuedTicketCollection { Tickets = { [ticket.Id] = ticket } };
+
+        var result = EventTicketRepository.ApplyCheckIn(tickets, requestedEvent, code, "door@example.com", null);
+
+        Assert.False(result.Success);
+        Assert.Equal("wrong_event", result.Status);
+        Assert.Null(result.TicketId);
+        Assert.Null(result.Attendee);
+        Assert.Null(result.TicketType);
+        Assert.Null(ticket.CheckedInAt);
+        Assert.Null(ticket.CheckedInBy);
+    }
+
+    [Fact]
+    public void ScannerRejectsRevokedAndUnknownTicketsWithoutCheckingThemIn()
+    {
+        const string code = "TKT-AAAA-BBBB-CCCC-DDDD";
+        var item = Event();
+        var ticket = new IssuedTicket
+        {
+            Id = "ticket-1",
+            EventId = item.Id,
+            TicketTypeId = "general",
+            AttendeeName = "Grace Hopper",
+            CodeHash = TicketCodeService.Hash(code),
+            Revoked = true
+        };
+        var tickets = new IssuedTicketCollection { Tickets = { [ticket.Id] = ticket } };
+
+        var revoked = EventTicketRepository.ApplyCheckIn(tickets, item, code, "door@example.com", null);
+        var unknown = EventTicketRepository.ApplyCheckIn(tickets, item, "TKT-NOT-A-TICKET", "door@example.com", null);
+
+        Assert.False(revoked.Success);
+        Assert.Equal("revoked", revoked.Status);
+        Assert.Equal("Grace Hopper", revoked.Attendee);
+        Assert.Equal("General", revoked.TicketType);
+        Assert.False(unknown.Success);
+        Assert.Equal("not_found", unknown.Status);
+        Assert.Null(ticket.CheckedInAt);
+    }
+
+    [Fact]
+    public void ScannerUrlsArePerEventAndEscapeTheCapabilityToken()
+    {
+        const string token = "staff secret+/=";
+        var escapedToken = Uri.EscapeDataString(token);
+
+        Assert.Equal(
+            $"/stores/store-1/events/builder%20summit/scanner?scannerToken={escapedToken}",
+            TicketPublicUrl.ScannerPath(false, "store-1", "builder summit", token));
+        Assert.Equal(
+            $"/events/builder%20summit/scanner?scannerToken={escapedToken}",
+            TicketPublicUrl.ScannerPath(true, "store-1", "builder summit", token));
+        Assert.Equal(
+            "/events/builder%20summit/scanner",
+            TicketPublicUrl.ScannerPath(true, "store-1", "builder summit"));
+    }
+
+    [Fact]
     public void SelectionBuildsMultipleImmutablePriceLines()
     {
         var item = Event();
