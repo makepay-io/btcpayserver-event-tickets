@@ -13,6 +13,9 @@
     var totalEntrances = Model.Tickets.Sum(ticket =>
         Math.Max(ticket.EntranceCount, ticket.CheckedInAt is null ? 0L : 1L));
     var eventsById = Model.Events.ToDictionary(item => item.Id, StringComparer.OrdinalIgnoreCase);
+    var firstOrderPageLink = Math.Max(1, Model.Orders.Page - 2);
+    var lastOrderPageLink = Math.Min(Model.Orders.TotalPages, firstOrderPageLink + 4);
+    firstOrderPageLink = Math.Max(1, lastOrderPageLink - 4);
     string ScannerUrl(TicketEvent item)
     {
         var scannerToken = Model.ScannerAccessTokens.GetValueOrDefault(item.Id);
@@ -36,10 +39,10 @@
     .mp-panel{min-width:0;max-width:100%;border:1px solid var(--mp-border);border-radius:12px;background:var(--mp-surface);overflow:hidden;margin-bottom:1.5rem}.mp-panel .table-responsive{max-width:100%;min-width:0;overflow-x:auto}.mp-panel-head{display:flex;min-width:0;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1rem 1.1rem;border-bottom:1px solid var(--mp-border)}.mp-panel-head h3{margin:0 0 .2rem;font-size:1rem}.mp-panel-head p{margin:0;color:var(--mp-muted);font-size:.78rem}.mp-panel-tools{display:flex;min-width:0;align-items:center;gap:.55rem;flex-wrap:wrap}.mp-search{position:relative;min-width:250px}.mp-search svg{position:absolute;top:50%;left:.72rem;width:16px;height:16px;fill:currentColor;color:var(--mp-muted);transform:translateY(-50%);pointer-events:none}.mp-search input{padding-left:2.15rem}
     .mp-admin-table{margin:0}.mp-admin-table>thead>tr>th{padding:.72rem 1rem;border-bottom:1px solid var(--mp-border);background:var(--mp-soft);color:var(--mp-muted);font-size:.68rem;letter-spacing:.055em;text-transform:uppercase;white-space:nowrap}.mp-admin-table>tbody>tr>td{padding:.8rem 1rem;vertical-align:middle}.mp-admin-table>tbody>tr:last-child>td{border-bottom:0}.mp-event-cell{display:flex;align-items:center;gap:.75rem;min-width:255px}.mp-event-thumb{display:grid;place-items:center;width:64px;height:48px;border:1px solid var(--mp-border);border-radius:8px;background:var(--mp-soft);overflow:hidden;color:var(--btcpay-primary,#51b13e);flex:none}.mp-event-thumb img{width:100%;height:100%;object-fit:cover}.mp-event-thumb svg{width:21px;height:21px;fill:currentColor}.mp-event-info{min-width:0}.mp-event-info strong{display:block;max-width:310px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.84rem}.mp-event-info span{display:block;color:var(--mp-muted);font-size:.7rem}.mp-event-venue{display:block;max-width:230px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mp-row-actions{display:flex;justify-content:flex-end;gap:.35rem;white-space:nowrap}
     .mp-badge{display:inline-flex;align-items:center;gap:.3rem;border-radius:999px;padding:.27rem .55rem;font-size:.68rem;font-weight:750;white-space:nowrap}.mp-badge.is-live,.mp-badge.is-paid,.mp-badge.is-ready{background:rgba(var(--btcpay-success-rgb,18,183,106),.12);color:var(--btcpay-success,#067647)}.mp-badge.is-draft,.mp-badge.is-pending{background:var(--mp-soft);color:var(--mp-muted)}.mp-badge.is-warning{background:rgba(var(--btcpay-warning-rgb,247,144,9),.13);color:var(--btcpay-warning-text,#b54708)}.mp-badge.is-revoked{background:rgba(var(--btcpay-danger-rgb,240,68,56),.11);color:var(--btcpay-danger,#b42318)}
-    .mp-table-empty{padding:3.2rem 1rem!important;text-align:center}.mp-table-empty svg{width:34px;height:34px;fill:currentColor;color:var(--mp-muted);margin-bottom:.7rem}.mp-table-empty strong{display:block;margin-bottom:.2rem}.mp-table-empty span{display:block;color:var(--mp-muted);font-size:.8rem;margin-bottom:.9rem}.mp-filter-empty{display:none;padding:2rem;text-align:center;color:var(--mp-muted);font-size:.82rem}.mp-filter-empty.is-visible{display:block}.mp-order-id{font-size:.73rem}.mp-order-customer{display:block;max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mp-attribution{display:flex;align-items:flex-start;gap:.7rem;border:1px solid rgba(var(--btcpay-primary-rgb,81,177,62),.2);border-radius:10px;background:rgba(var(--btcpay-primary-rgb,81,177,62),.055);padding:.85rem 1rem;color:var(--mp-muted);font-size:.78rem;line-height:1.45}.mp-attribution svg{width:18px;height:18px;fill:currentColor;color:var(--btcpay-primary,#51b13e);flex:none;margin-top:.1rem}
+    .mp-table-empty{padding:3.2rem 1rem!important;text-align:center}.mp-table-empty svg{width:34px;height:34px;fill:currentColor;color:var(--mp-muted);margin-bottom:.7rem}.mp-table-empty strong{display:block;margin-bottom:.2rem}.mp-table-empty span{display:block;color:var(--mp-muted);font-size:.8rem;margin-bottom:.9rem}.mp-filter-empty{display:none;padding:2rem;text-align:center;color:var(--mp-muted);font-size:.82rem}.mp-filter-empty.is-visible{display:block}.mp-order-id{font-size:.73rem}.mp-order-customer{display:block;max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mp-order-panel{scroll-margin-top:1rem}.mp-order-filters{display:flex;align-items:center;justify-content:flex-end;gap:.55rem;flex:1;flex-wrap:wrap}.mp-order-filters .mp-search{min-width:260px}.mp-order-filter-event{min-width:180px}.mp-order-filter-status{min-width:130px}.mp-order-page-size{width:105px}.mp-order-pagination{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.8rem 1rem;border-top:1px solid var(--mp-border);background:var(--mp-soft)}.mp-order-range{margin:0;color:var(--mp-muted);font-size:.76rem}.mp-order-pages{display:flex;align-items:center;gap:.3rem}.mp-order-pages .btn{min-width:34px}.mp-order-pages .btn[aria-current="page"]{pointer-events:none}.mp-attribution{display:flex;align-items:flex-start;gap:.7rem;border:1px solid rgba(var(--btcpay-primary-rgb,81,177,62),.2);border-radius:10px;background:rgba(var(--btcpay-primary-rgb,81,177,62),.055);padding:.85rem 1rem;color:var(--mp-muted);font-size:.78rem;line-height:1.45}.mp-attribution svg{width:18px;height:18px;fill:currentColor;color:var(--btcpay-primary,#51b13e);flex:none;margin-top:.1rem}
     .mp-scanner-share-grid{display:grid;grid-template-columns:minmax(180px,220px) minmax(0,1fr);gap:1.25rem;align-items:center}.mp-scanner-qr{display:grid;place-items:center;min-height:220px;border:1px solid var(--mp-border);border-radius:12px;background:#fff;padding:.7rem}.mp-scanner-qr img,.mp-scanner-qr canvas{display:block!important;width:100%!important;max-width:200px!important;height:auto!important}.mp-scanner-url{font-size:.78rem}.mp-scanner-security{border:1px solid var(--mp-border);border-radius:10px;background:var(--mp-soft);padding:1rem}.mp-scanner-security p{font-size:.78rem}.mp-admission-name{display:block;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mp-admission-detail{color:var(--mp-muted);font-size:.7rem}.mp-admission-count{text-align:center;font-variant-numeric:tabular-nums}
-    @@media(max-width:991.98px){.mp-stat-grid{grid-template-columns:1fr 1fr}.mp-panel-head{align-items:stretch;flex-direction:column}.mp-panel-tools{width:100%}.mp-search{flex:1;min-width:180px}}
-    @@media(max-width:575.98px){.mp-stat-grid{grid-template-columns:1fr}.mp-admin-actions{width:100%}.mp-admin-actions .btn-primary{flex:1}.mp-panel-tools{align-items:stretch;flex-direction:column}.mp-search{width:100%}.mp-row-actions{justify-content:flex-start}.mp-event-cell{min-width:220px}.mp-scanner-share-grid{grid-template-columns:1fr}.mp-scanner-qr{width:220px;max-width:100%;margin:auto}}
+    @@media(max-width:991.98px){.mp-stat-grid{grid-template-columns:1fr 1fr}.mp-panel-head{align-items:stretch;flex-direction:column}.mp-panel-tools,.mp-order-filters{width:100%;justify-content:flex-start}.mp-search{flex:1;min-width:180px}}
+    @@media(max-width:575.98px){.mp-stat-grid{grid-template-columns:1fr}.mp-admin-actions{width:100%}.mp-admin-actions .btn-primary{flex:1}.mp-panel-tools,.mp-order-filters{align-items:stretch;flex-direction:column}.mp-search,.mp-order-filters .mp-search,.mp-order-filter-event,.mp-order-filter-status,.mp-order-page-size{width:100%;min-width:0}.mp-order-filters .btn{width:100%}.mp-order-pagination{align-items:stretch;flex-direction:column}.mp-order-pages{justify-content:space-between}.mp-order-pages .mp-order-page-number{display:none}.mp-row-actions{justify-content:flex-start}.mp-event-cell{min-width:220px}.mp-scanner-share-grid{grid-template-columns:1fr}.mp-scanner-qr{width:220px;max-width:100%;margin:auto}}
 </style>
 
 <div class="mp-admin-dashboard">
@@ -218,17 +221,83 @@
         </div>
     </section>
 
-    <section class="mp-panel" aria-labelledby="orders-heading">
-        <div class="mp-panel-head"><div><h3 id="orders-heading">Recent orders</h3><p>The latest 100 reservations, payment states, invoice links, and ticket-delivery activity.</p></div></div>
+    <section class="mp-panel mp-order-panel" id="orders" aria-labelledby="orders-heading">
+        <div class="mp-panel-head">
+            <div><h3 id="orders-heading">Recent orders</h3><p>Search and filter every reservation, payment state, invoice link, and delivery attempt.</p></div>
+            <form class="mp-order-filters" method="get" asp-action="Index" asp-route-storeId="@Model.StoreId" asp-fragment="orders" aria-label="Filter orders">
+                <input type="hidden" name="OrderPage" value="1" />
+                <label class="mp-search">
+                    <span class="visually-hidden">Search by order, invoice, customer, or email</span>
+                    <svg aria-hidden="true"><use href="@($"{iconSpriteUrl}#actions-search")"></use></svg>
+                    <input class="form-control form-control-sm" type="search" name="OrderSearch" value="@Model.Orders.Search" maxlength="200" placeholder="Order, invoice, customer, email" />
+                </label>
+                <label>
+                    <span class="visually-hidden">Filter orders by event</span>
+                    <select class="form-select form-select-sm mp-order-filter-event" name="OrderEventId">
+                        <option value="">All events</option>
+                        @foreach (var item in Model.Events.OrderBy(item => item.Name))
+                        {
+                            if (string.Equals(Model.Orders.EventId, item.Id, StringComparison.OrdinalIgnoreCase))
+                            {
+                                <option value="@item.Id" selected>@item.Name</option>
+                            }
+                            else
+                            {
+                                <option value="@item.Id">@item.Name</option>
+                            }
+                        }
+                    </select>
+                </label>
+                <label>
+                    <span class="visually-hidden">Filter orders by payment status</span>
+                    <select class="form-select form-select-sm mp-order-filter-status" name="OrderStatus">
+                        <option value="">All statuses</option>
+                        @foreach (var status in Enum.GetValues<TicketOrderStatus>())
+                        {
+                            var statusValue = status.ToString().ToLowerInvariant();
+                            if (Model.Orders.Status == status)
+                            {
+                                <option value="@statusValue" selected>@status</option>
+                            }
+                            else
+                            {
+                                <option value="@statusValue">@status</option>
+                            }
+                        }
+                    </select>
+                </label>
+                <label>
+                    <span class="visually-hidden">Orders per page</span>
+                    <select class="form-select form-select-sm mp-order-page-size" name="OrderPageSize" aria-label="Orders per page">
+                        @foreach (var pageSize in EventTicketOrderQueryService.AllowedPageSizes)
+                        {
+                            if (Model.Orders.PageSize == pageSize)
+                            {
+                                <option value="@pageSize" selected>@pageSize / page</option>
+                            }
+                            else
+                            {
+                                <option value="@pageSize">@pageSize / page</option>
+                            }
+                        }
+                    </select>
+                </label>
+                <button class="btn btn-sm btn-secondary" type="submit">Apply</button>
+                @if (Model.Orders.IsFiltered)
+                {
+                    <a class="btn btn-sm btn-link" asp-action="Index" asp-route-storeId="@Model.StoreId" asp-fragment="orders">Clear</a>
+                }
+            </form>
+        </div>
         <div class="table-responsive">
             <table class="table mp-admin-table align-middle">
                 <thead><tr><th>Created</th><th>Order / invoice</th><th>Event</th><th>Customer</th><th>Quantity</th><th>Status</th><th>Email</th></tr></thead>
                 <tbody>
-                    @if (!Model.Orders.Any())
+                    @if (!Model.Orders.Items.Any())
                     {
-                        <tr><td colspan="7" class="mp-table-empty"><svg aria-hidden="true"><use href="@($"{iconSpriteUrl}#nav-invoices")"></use></svg><strong>No orders yet</strong><span>Reservations, BTCPay invoices, and delivery status will appear here.</span></td></tr>
+                        <tr><td colspan="7" class="mp-table-empty"><svg aria-hidden="true"><use href="@($"{iconSpriteUrl}#nav-invoices")"></use></svg>@if (Model.Orders.IsFiltered) { <strong>No matching orders</strong><span>Try a different search, event, or status filter.</span><a class="btn btn-secondary" asp-action="Index" asp-route-storeId="@Model.StoreId" asp-fragment="orders">Clear filters</a> } else { <strong>No orders yet</strong><span>Reservations, BTCPay invoices, and delivery status will appear here.</span> }</td></tr>
                     }
-                    @foreach (var order in Model.Orders)
+                    @foreach (var order in Model.Orders.Items)
                     {
                         eventsById.TryGetValue(order.EventId, out var orderEvent);
                         var shortId = order.Id[..Math.Min(8, order.Id.Length)];
@@ -250,6 +319,45 @@
                     }
                 </tbody>
             </table>
+        </div>
+        <div class="mp-order-pagination">
+            @if (Model.Orders.TotalItems == 0)
+            {
+                <p class="mp-order-range" role="status">No orders to show</p>
+            }
+            else
+            {
+                <p class="mp-order-range" role="status">Showing <strong>@(Model.Orders.FirstItem)–@(Model.Orders.LastItem)</strong> of <strong>@Model.Orders.TotalItems</strong> orders</p>
+            }
+            <nav class="mp-order-pages" aria-label="Orders pagination">
+                @if (Model.Orders.HasPreviousPage)
+                {
+                    <a class="btn btn-sm btn-secondary" asp-action="Index" asp-route-storeId="@Model.StoreId" asp-route-orderSearch="@Model.Orders.Search" asp-route-orderEventId="@Model.Orders.EventId" asp-route-orderStatus="@Model.Orders.Status?.ToString().ToLowerInvariant()" asp-route-orderPageSize="@Model.Orders.PageSize" asp-route-orderPage="@(Model.Orders.Page - 1)" asp-fragment="orders" rel="prev">Previous</a>
+                }
+                else
+                {
+                    <button class="btn btn-sm btn-secondary" type="button" disabled>Previous</button>
+                }
+                @for (var pageNumber = firstOrderPageLink; pageNumber <= lastOrderPageLink; pageNumber++)
+                {
+                    if (pageNumber == Model.Orders.Page)
+                    {
+                        <span class="btn btn-sm btn-primary mp-order-page-number" aria-current="page">@pageNumber</span>
+                    }
+                    else
+                    {
+                        <a class="btn btn-sm btn-secondary mp-order-page-number" asp-action="Index" asp-route-storeId="@Model.StoreId" asp-route-orderSearch="@Model.Orders.Search" asp-route-orderEventId="@Model.Orders.EventId" asp-route-orderStatus="@Model.Orders.Status?.ToString().ToLowerInvariant()" asp-route-orderPageSize="@Model.Orders.PageSize" asp-route-orderPage="@pageNumber" asp-fragment="orders" aria-label="Go to orders page @pageNumber">@pageNumber</a>
+                    }
+                }
+                @if (Model.Orders.HasNextPage)
+                {
+                    <a class="btn btn-sm btn-secondary" asp-action="Index" asp-route-storeId="@Model.StoreId" asp-route-orderSearch="@Model.Orders.Search" asp-route-orderEventId="@Model.Orders.EventId" asp-route-orderStatus="@Model.Orders.Status?.ToString().ToLowerInvariant()" asp-route-orderPageSize="@Model.Orders.PageSize" asp-route-orderPage="@(Model.Orders.Page + 1)" asp-fragment="orders" rel="next">Next</a>
+                }
+                else
+                {
+                    <button class="btn btn-sm btn-secondary" type="button" disabled>Next</button>
+                }
+            </nav>
         </div>
     </section>
 

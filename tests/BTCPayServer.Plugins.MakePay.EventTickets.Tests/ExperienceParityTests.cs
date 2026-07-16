@@ -64,6 +64,19 @@ public sealed class ExperienceParityTests
         Assert.Contains("ticket.IdRejectedCount", AdminDashboard, StringComparison.Ordinal);
         Assert.DoesNotMatch(new Regex(@"\.mp-admin-dashboard\{[^}]*overflow-x\s*:\s*hidden",
             RegexOptions.CultureInvariant), AdminDashboard);
+
+        Assert.Contains("name=\"OrderSearch\"", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("name=\"OrderEventId\"", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("name=\"OrderStatus\"", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("name=\"OrderPageSize\"", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("asp-route-orderSearch", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("asp-route-orderEventId", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("asp-route-orderStatus", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("Orders pagination", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("asp-fragment=\"orders\"", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("EventTicketOrderQueryService.Apply(await repository.GetOrders(storeId)",
+            AdminController, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetOrders(storeId)).Take(100)", AdminController, StringComparison.Ordinal);
     }
 
     [Fact]
