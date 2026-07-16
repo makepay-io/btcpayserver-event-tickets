@@ -16,7 +16,7 @@ public class TicketTests
     [Fact]
     public void ReleaseVersionMetadataIsSynchronized()
     {
-        const string expected = "1.6.0";
+        const string expected = "1.6.1";
         var project = File.ReadAllText(RepositoryFile(
             "src", "BTCPayServer.Plugins.MakePay.EventTickets", "BTCPayServer.Plugins.MakePay.EventTickets.csproj"));
         var plugin = File.ReadAllText(RepositoryFile(
