@@ -298,6 +298,107 @@ public sealed class EventTicketOrderPage
                               Status is not null;
 }
 
+public sealed class EventTicketOrderLineDetail
+{
+    public required string TicketTypeId { get; init; }
+    public required string TicketTypeName { get; init; }
+    public required int Quantity { get; init; }
+    public decimal? UnitPrice { get; init; }
+    public decimal? Total => UnitPrice * Quantity;
+}
+
+public sealed record EventTicketInvoiceSnapshot(decimal Amount, string Currency);
+
+public sealed class EventTicketAttendeeDetail
+{
+    public required string TicketTypeId { get; init; }
+    public required string TicketTypeName { get; init; }
+    public required string FirstName { get; init; }
+    public required string LastName { get; init; }
+    public required string Nickname { get; init; }
+    public required string Email { get; init; }
+    public required string Phone { get; init; }
+    public required string Country { get; init; }
+    public required string Company { get; init; }
+    public string Name => string.Join(" ", new[] { FirstName, LastName }.Where(value => !string.IsNullOrWhiteSpace(value)));
+}
+
+public sealed class EventTicketIssuedTicketDetail
+{
+    public required string TicketId { get; init; }
+    public required string TicketTypeId { get; init; }
+    public required string TicketTypeName { get; init; }
+    public required string AttendeeName { get; init; }
+    public required string AttendeeEmail { get; init; }
+    public required DateTimeOffset IssuedAt { get; init; }
+    public DateTimeOffset? CheckedInAt { get; init; }
+    public string? CheckedInBy { get; init; }
+    public string? CheckInGate { get; init; }
+    public DateTimeOffset? CheckedOutAt { get; init; }
+    public string? CheckedOutBy { get; init; }
+    public string? CheckOutGate { get; init; }
+    public required long EntranceCount { get; init; }
+    public required long IdConfirmedCount { get; init; }
+    public required long IdRejectedCount { get; init; }
+    public DateTimeOffset? LastIdCheckedAt { get; init; }
+    public string? LastIdCheckedBy { get; init; }
+    public bool? LastIdCheckConfirmed { get; init; }
+    public required bool Revoked { get; init; }
+    public required bool IsInside { get; init; }
+    public required DateTimeOffset LastActivityAt { get; init; }
+    public string? LastGate { get; init; }
+}
+
+public sealed class EventTicketAdminOrderDetail
+{
+    public required string Id { get; init; }
+    public required string EventId { get; init; }
+    public required string BuyerEmail { get; init; }
+    public required string BuyerName { get; init; }
+    public required string BuyerFirstName { get; init; }
+    public required string BuyerLastName { get; init; }
+    public required string BuyerPhone { get; init; }
+    public required string BuyerCountry { get; init; }
+    public required string BuyerCompany { get; init; }
+    public string? Currency { get; init; }
+    public decimal? Subtotal { get; init; }
+    public decimal? DiscountAmount { get; init; }
+    public decimal? Total { get; init; }
+    public required bool AmountsFromInvoice { get; init; }
+    public string? PromoCode { get; init; }
+    public string? InvoiceId { get; init; }
+    public required bool PosMode { get; init; }
+    public required TicketOrderStatus Status { get; init; }
+    public required DateTimeOffset CreatedAt { get; init; }
+    public DateTimeOffset? ReservationExpiresAt { get; init; }
+    public DateTimeOffset? TermsAcceptedAt { get; init; }
+    public DateTimeOffset? PaidAt { get; init; }
+    public required bool DeliverySent { get; init; }
+}
+
+public sealed class EventTicketAdminEventDetail
+{
+    public required string Id { get; init; }
+    public required string Name { get; init; }
+    public required string Slug { get; init; }
+    public required string VenueName { get; init; }
+    public required string VenueAddress { get; init; }
+    public required DateTimeOffset StartsAt { get; init; }
+    public required DateTimeOffset EndsAt { get; init; }
+    public required bool RequireIdCheck { get; init; }
+}
+
+public sealed class EventTicketOrderDetailViewModel
+{
+    public required string StoreId { get; init; }
+    public required EventTicketAdminOrderDetail Order { get; init; }
+    public EventTicketAdminEventDetail? Event { get; init; }
+    public required IReadOnlyList<EventTicketOrderLineDetail> Lines { get; init; }
+    public required IReadOnlyList<EventTicketAttendeeDetail> Attendees { get; init; }
+    public required IReadOnlyList<EventTicketIssuedTicketDetail> Tickets { get; init; }
+    public EventTicketOrderQuery ReturnQuery { get; init; } = new();
+}
+
 public sealed class EventStorefrontViewModel { public required string StoreId { get; init; } public required EventTicketSettings Settings { get; init; } public required IReadOnlyList<TicketEvent> Events { get; init; } public required IReadOnlyDictionary<string, Dictionary<string, int?>> Remaining { get; init; } public bool CleanUrls { get; init; } }
 public sealed class EventDetailViewModel { public required string StoreId { get; init; } public required EventTicketSettings Settings { get; init; } public required TicketEvent Event { get; init; } public required Dictionary<string, int?> Remaining { get; init; } public bool PosMode { get; init; } public bool CleanUrls { get; init; } }
 public sealed class EventScannerViewModel

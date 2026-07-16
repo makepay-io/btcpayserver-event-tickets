@@ -7,6 +7,7 @@ namespace BTCPayServer.Plugins.MakePay.EventTickets.Tests;
 public sealed class ExperienceParityTests
 {
     private static readonly string AdminDashboard = Source("Views", "EventTickets", "Index.cshtml");
+    private static readonly string AdminOrder = Source("Views", "EventTickets", "Order.cshtml");
     private static readonly string Settings = Source("Views", "EventTickets", "Settings.cshtml");
     private static readonly string EventEditor = Source("Views", "EventTickets", "Event.cshtml");
     private static readonly string Cart = Source("Views", "EventTickets", "Public", "Cart.cshtml");
@@ -77,6 +78,56 @@ public sealed class ExperienceParityTests
         Assert.Contains("EventTicketOrderQueryService.Apply(await repository.GetOrders(storeId)",
             AdminController, StringComparison.Ordinal);
         Assert.DoesNotContain("GetOrders(storeId)).Take(100)", AdminController, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Admin_orders_link_to_a_safe_professional_detail_workspace()
+    {
+        Assert.Contains("[HttpGet(\"orders/{orderId}\")]", AdminController, StringComparison.Ordinal);
+        Assert.Contains("repository.GetOrder(storeId, orderId)", AdminController, StringComparison.Ordinal);
+        Assert.Contains("EventTicketOrderDetailService.Build(storeId, order, item, tickets, orderQuery, invoiceSnapshot)",
+            AdminController, StringComparison.Ordinal);
+        Assert.Contains("string.Equals(invoice.StoreId, storeId, StringComparison.Ordinal)", AdminController,
+            StringComparison.Ordinal);
+        Assert.Contains("~/Views/EventTickets/Order.cshtml", AdminController, StringComparison.Ordinal);
+
+        Assert.True(Regex.Matches(AdminDashboard, "asp-action=\"Order\"").Count >= 2);
+        Assert.Contains("asp-route-orderId=\"@order.Id\"", AdminDashboard, StringComparison.Ordinal);
+        Assert.Contains("asp-route-orderSearch=\"@Model.Orders.Search\"", AdminDashboard,
+            StringComparison.Ordinal);
+        Assert.Contains("asp-route-orderPage=\"@Model.Orders.Page\"", AdminDashboard,
+            StringComparison.Ordinal);
+
+        Assert.Contains("class=\"mp-order-detail\"", AdminOrder, StringComparison.Ordinal);
+        Assert.Contains("Event ticket order", AdminOrder, StringComparison.Ordinal);
+        Assert.Contains("Order overview", AdminOrder, StringComparison.Ordinal);
+        Assert.Contains("Ticket items", AdminOrder, StringComparison.Ordinal);
+        Assert.Contains("Attendee details", AdminOrder, StringComparison.Ordinal);
+        Assert.Contains("Issued tickets &amp; admissions", AdminOrder, StringComparison.Ordinal);
+        Assert.Contains("Payment summary", AdminOrder, StringComparison.Ordinal);
+        Assert.Contains("Not captured for this legacy order", AdminOrder, StringComparison.Ordinal);
+        Assert.Contains("Order timeline", AdminOrder, StringComparison.Ordinal);
+        Assert.Contains("ID confirmed", AdminOrder, StringComparison.Ordinal);
+        Assert.Contains("ID rejected", AdminOrder, StringComparison.Ordinal);
+        Assert.Contains("Last check-in", AdminOrder, StringComparison.Ordinal);
+        Assert.Contains("Last check-out", AdminOrder, StringComparison.Ordinal);
+        Assert.Contains("Last ID decision", AdminOrder, StringComparison.Ordinal);
+        Assert.Contains("asp-controller=\"UIInvoice\"", AdminOrder, StringComparison.Ordinal);
+        Assert.Contains("asp-action=\"Event\"", AdminOrder, StringComparison.Ordinal);
+        Assert.Contains("asp-fragment=\"orders\"", AdminOrder, StringComparison.Ordinal);
+        Assert.Contains("asp-route-orderSearch=\"@Model.ReturnQuery.OrderSearch\"", AdminOrder,
+            StringComparison.Ordinal);
+
+        foreach (var secret in new[]
+                 {
+                     "ProtectedCode", "CodeHash", "ProtectedPublicAccessToken", "PublicAccessTokenHash",
+                     "ProtectedScannerAccessToken", "ScannerAccessTokenHash", "LastScannerOperationId"
+                 })
+            Assert.DoesNotContain(secret, AdminOrder, StringComparison.Ordinal);
+
+        Assert.DoesNotContain("method=\"post\"", AdminOrder, StringComparison.Ordinal);
+        Assert.DoesNotContain("asp-action=\"Cancel", AdminOrder, StringComparison.Ordinal);
+        Assert.DoesNotContain("asp-action=\"Revoke", AdminOrder, StringComparison.Ordinal);
     }
 
     [Fact]

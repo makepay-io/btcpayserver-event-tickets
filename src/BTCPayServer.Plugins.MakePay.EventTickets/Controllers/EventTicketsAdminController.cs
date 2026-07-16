@@ -5,6 +5,7 @@ using BTCPayServer.Abstractions.Models;
 using BTCPayServer.Client;
 using BTCPayServer.Plugins.MakePay.EventTickets.Models;
 using BTCPayServer.Plugins.MakePay.EventTickets.Services;
+using BTCPayServer.Services.Invoices;
 using BTCPayServer.Services.Stores;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -20,6 +21,7 @@ public sealed class EventTicketsAdminController(
     EventTicketRepository repository,
     TicketCodeService secrets,
     EventTicketsAppService eventApps,
+    InvoiceRepository invoiceRepository,
     IAuthorizationService authorization) : Controller
 {
     [HttpGet("")]
@@ -31,6 +33,32 @@ public sealed class EventTicketsAdminController(
         var scannerAccessTokens = events.ToDictionary(item => item.Id, secrets.EnsureScannerAccessToken, StringComparer.OrdinalIgnoreCase);
         ViewData.SetActivePage("EventTickets", "Event Tickets", "Event Tickets");
         return View("~/Views/EventTickets/Index.cshtml", new EventTicketsDashboardViewModel { StoreId = storeId, Settings = await repository.GetSettings(storeId), Events = events, Orders = orderPage, Tickets = await repository.GetTickets(storeId), ScannerAccessTokens = scannerAccessTokens, MappedBaseUrl = await eventApps.GetMappedBaseUrl(storeId) });
+    }
+    [HttpGet("orders/{orderId}")]
+    public async Task<IActionResult> Order(
+        string storeId,
+        string orderId,
+        [FromQuery] EventTicketOrderQuery? orderQuery)
+    {
+        var store = await stores.FindStore(storeId);
+        if (store is null) return NotFound();
+        var order = await repository.GetOrder(storeId, orderId);
+        if (order is null) return NotFound();
+
+        var item = string.IsNullOrWhiteSpace(order.EventId)
+            ? null
+            : await repository.GetEvent(storeId, order.EventId);
+        var tickets = await repository.GetTickets(storeId);
+        EventTicketInvoiceSnapshot? invoiceSnapshot = null;
+        if (!string.IsNullOrWhiteSpace(order.InvoiceId))
+        {
+            var invoice = await invoiceRepository.GetInvoice(order.InvoiceId);
+            if (invoice is not null && string.Equals(invoice.StoreId, storeId, StringComparison.Ordinal))
+                invoiceSnapshot = new EventTicketInvoiceSnapshot(invoice.Price, invoice.Currency);
+        }
+        ViewData.SetActivePage("EventTickets", "Event Tickets", "Event Tickets");
+        return View("~/Views/EventTickets/Order.cshtml",
+            EventTicketOrderDetailService.Build(storeId, order, item, tickets, orderQuery, invoiceSnapshot));
     }
     [HttpGet("events/new")][HttpGet("events/{eventId}")]
     public async Task<IActionResult> Event(string storeId, string? eventId)

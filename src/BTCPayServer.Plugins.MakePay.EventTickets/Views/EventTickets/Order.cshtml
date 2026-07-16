@@ -1,0 +1,250 @@
+@model EventTicketOrderDetailViewModel
+@{
+    ViewData.SetActivePage("EventTickets", "Event Tickets", "Event Tickets");
+    var order = Model.Order;
+    var item = Model.Event;
+    var iconSpriteUrl = Url.Content("~/img/icon-sprite.svg");
+    var shortOrderId = order.Id[..Math.Min(8, order.Id.Length)];
+    var buyerName = !string.IsNullOrWhiteSpace(order.BuyerName)
+        ? order.BuyerName
+        : string.Join(" ", new[] { order.BuyerFirstName, order.BuyerLastName }.Where(value => !string.IsNullOrWhiteSpace(value)));
+    var statusClass = order.Status switch
+    {
+        TicketOrderStatus.Paid => "is-paid",
+        TicketOrderStatus.Pending => "is-pending",
+        _ => "is-revoked"
+    };
+    var now = DateTimeOffset.UtcNow;
+    var reservationExpired = order.Status == TicketOrderStatus.Pending &&
+                             order.ReservationExpiresAt is { } reservationExpiresAt &&
+                             reservationExpiresAt <= now;
+    string Money(decimal? amount) => amount is null || string.IsNullOrWhiteSpace(order.Currency)
+        ? "Not captured"
+        : $"{amount.Value:0.00} {order.Currency}";
+}
+
+<style>
+    #mainContent{min-width:0}
+    .mp-order-detail{--mp-border:var(--btcpay-body-border-light,#d0d5dd);--mp-surface:var(--btcpay-bg-tile,#fff);--mp-soft:var(--btcpay-body-bg-light,#f8fafc);--mp-muted:var(--btcpay-body-text-muted,#667085);--mp-text:var(--btcpay-body-text,#101828);width:100%;min-width:0;color:var(--mp-text)}
+    .mp-detail-header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1.4rem}.mp-detail-heading{min-width:0}.mp-detail-heading h2{margin:.15rem 0 .25rem}.mp-detail-heading p{margin:0;color:var(--mp-muted);font-size:.83rem}.mp-detail-eyebrow{display:flex;align-items:center;gap:.35rem;color:var(--mp-muted);font-size:.72rem;font-weight:700;letter-spacing:.055em;text-transform:uppercase}.mp-detail-eyebrow code{font-size:inherit;text-transform:none}.mp-detail-actions{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}.mp-detail-actions .btn{display:inline-flex;align-items:center;justify-content:center;gap:.3rem;white-space:nowrap}.mp-detail-actions svg{width:17px;height:17px;fill:currentColor}
+    .mp-detail-stats{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:.8rem;margin-bottom:1.4rem}.mp-detail-stat{display:flex;align-items:center;gap:.8rem;min-height:86px;border:1px solid var(--mp-border);border-radius:11px;background:var(--mp-surface);padding:.95rem}.mp-detail-stat-icon{display:grid;place-items:center;width:40px;height:40px;border-radius:9px;background:rgba(var(--btcpay-primary-rgb,81,177,62),.09);color:var(--btcpay-primary,#51b13e);flex:none}.mp-detail-stat-icon svg{width:19px;height:19px;fill:currentColor}.mp-detail-stat-copy{min-width:0}.mp-detail-stat-copy>span{display:block;color:var(--mp-muted);font-size:.72rem}.mp-detail-stat-copy>strong{display:block;margin-top:.08rem;font-size:1.05rem;line-height:1.25;overflow-wrap:anywhere}.mp-detail-stat-copy small{display:block;margin-top:.12rem;color:var(--mp-muted);font-size:.68rem}
+    .mp-detail-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(285px,1fr);gap:1rem;align-items:start}.mp-detail-main,.mp-detail-side{min-width:0}.mp-detail-panel{min-width:0;border:1px solid var(--mp-border);border-radius:12px;background:var(--mp-surface);overflow:hidden;margin-bottom:1rem}.mp-detail-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1rem 1.1rem;border-bottom:1px solid var(--mp-border)}.mp-detail-panel-head h3{margin:0 0 .2rem;font-size:1rem}.mp-detail-panel-head p{margin:0;color:var(--mp-muted);font-size:.76rem}.mp-detail-panel-body{padding:1rem 1.1rem}.mp-detail-panel .table-responsive{min-width:0;overflow-x:auto}
+    .mp-detail-list{display:grid;grid-template-columns:minmax(120px,.75fr) minmax(0,1.4fr);gap:.7rem 1rem;margin:0}.mp-detail-list dt{color:var(--mp-muted);font-size:.72rem;font-weight:600}.mp-detail-list dd{min-width:0;margin:0;font-size:.8rem;overflow-wrap:anywhere}.mp-detail-list dd strong{font-weight:650}.mp-detail-list code{font-size:.72rem}.mp-detail-link{font-weight:600;text-decoration:none}.mp-detail-link:hover{text-decoration:underline}
+    .mp-detail-table{margin:0}.mp-detail-table>thead>tr>th{padding:.72rem 1rem;border-bottom:1px solid var(--mp-border);background:var(--mp-soft);color:var(--mp-muted);font-size:.68rem;letter-spacing:.055em;text-transform:uppercase;white-space:nowrap}.mp-detail-table>tbody>tr>td{padding:.8rem 1rem;vertical-align:middle}.mp-detail-table>tbody>tr:last-child>td{border-bottom:0}.mp-detail-table .mp-cell-title{display:block;font-size:.8rem;font-weight:650}.mp-detail-table .mp-cell-meta{display:block;margin-top:.12rem;color:var(--mp-muted);font-size:.69rem}.mp-detail-empty{padding:2.2rem 1rem!important;text-align:center;color:var(--mp-muted);font-size:.78rem}
+    .mp-badge{display:inline-flex;align-items:center;gap:.3rem;border-radius:999px;padding:.27rem .55rem;font-size:.68rem;font-weight:750;white-space:nowrap}.mp-badge.is-paid,.mp-badge.is-ready{background:rgba(var(--btcpay-success-rgb,18,183,106),.12);color:var(--btcpay-success,#067647)}.mp-badge.is-pending,.mp-badge.is-draft{background:var(--mp-soft);color:var(--mp-muted)}.mp-badge.is-warning{background:rgba(var(--btcpay-warning-rgb,247,144,9),.13);color:var(--btcpay-warning-text,#b54708)}.mp-badge.is-revoked{background:rgba(var(--btcpay-danger-rgb,240,68,56),.11);color:var(--btcpay-danger,#b42318)}
+    .mp-money-lines{display:grid;gap:.65rem}.mp-money-row{display:flex;align-items:center;justify-content:space-between;gap:1rem;color:var(--mp-muted);font-size:.78rem}.mp-money-row strong{color:var(--mp-text)}.mp-money-row.is-total{margin-top:.15rem;padding-top:.8rem;border-top:1px solid var(--mp-border);color:var(--mp-text);font-size:.92rem;font-weight:700}.mp-money-row.is-discount strong{color:var(--btcpay-success,#067647)}
+    .mp-customer-name{margin:0 0 .2rem;font-size:.95rem}.mp-customer-email{display:block;margin-bottom:.8rem;font-size:.78rem;overflow-wrap:anywhere}.mp-customer-meta{display:grid;gap:.55rem;padding-top:.8rem;border-top:1px solid var(--mp-border)}.mp-customer-meta div{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;font-size:.74rem}.mp-customer-meta span{color:var(--mp-muted)}.mp-customer-meta strong{text-align:right;overflow-wrap:anywhere}
+    .mp-timeline{display:grid;gap:.8rem;margin:0;padding:0;list-style:none}.mp-timeline li{position:relative;display:grid;grid-template-columns:10px minmax(0,1fr);gap:.65rem}.mp-timeline li:not(:last-child)::after{content:"";position:absolute;top:14px;bottom:-12px;left:4px;width:1px;background:var(--mp-border)}.mp-timeline-dot{position:relative;z-index:1;width:9px;height:9px;margin-top:.28rem;border:2px solid var(--mp-surface);border-radius:50%;background:var(--btcpay-primary,#51b13e);box-shadow:0 0 0 1px var(--btcpay-primary,#51b13e)}.mp-timeline strong{display:block;font-size:.76rem}.mp-timeline span{display:block;color:var(--mp-muted);font-size:.68rem}
+    .mp-ticket-list{display:grid;gap:.8rem;padding:1rem 1.1rem}.mp-ticket-card{border:1px solid var(--mp-border);border-radius:10px;background:var(--mp-soft);padding:.9rem}.mp-ticket-head{display:flex;align-items:flex-start;justify-content:space-between;gap:.8rem}.mp-ticket-head h4{margin:0;font-size:.86rem}.mp-ticket-head p{margin:.15rem 0 0;color:var(--mp-muted);font-size:.69rem;overflow-wrap:anywhere}.mp-ticket-id{display:block;margin-top:.45rem;font-size:.68rem}.mp-admission-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.55rem;margin-top:.8rem}.mp-admission-metric{border:1px solid var(--mp-border);border-radius:8px;background:var(--mp-surface);padding:.55rem}.mp-admission-metric span{display:block;color:var(--mp-muted);font-size:.62rem;text-transform:uppercase;letter-spacing:.04em}.mp-admission-metric strong{display:block;margin-top:.12rem;font-size:.76rem;overflow-wrap:anywhere}.mp-admission-audit{display:grid;gap:.35rem;margin-top:.75rem;padding-top:.7rem;border-top:1px solid var(--mp-border);color:var(--mp-muted);font-size:.68rem}.mp-admission-audit strong{color:var(--mp-text)}
+    .mp-attribution{display:flex;align-items:flex-start;gap:.7rem;border:1px solid rgba(var(--btcpay-primary-rgb,81,177,62),.2);border-radius:10px;background:rgba(var(--btcpay-primary-rgb,81,177,62),.055);padding:.85rem 1rem;color:var(--mp-muted);font-size:.78rem;line-height:1.45}.mp-attribution svg{width:18px;height:18px;fill:currentColor;color:var(--btcpay-primary,#51b13e);flex:none;margin-top:.1rem}
+    @@media(max-width:991.98px){.mp-detail-stats{grid-template-columns:1fr 1fr}.mp-detail-layout{grid-template-columns:1fr}.mp-detail-side{display:grid;grid-template-columns:1fr 1fr;gap:1rem}.mp-detail-side .mp-detail-panel{margin:0}.mp-detail-side .mp-detail-panel:last-child{grid-column:1/-1}}
+    @@media(max-width:575.98px){.mp-detail-actions{width:100%}.mp-detail-actions .btn{flex:1}.mp-detail-stats,.mp-detail-side{grid-template-columns:1fr}.mp-detail-side .mp-detail-panel:last-child{grid-column:auto}.mp-detail-list{grid-template-columns:1fr;gap:.15rem}.mp-detail-list dd{margin-bottom:.55rem}.mp-admission-grid{grid-template-columns:1fr 1fr}}
+</style>
+
+<div class="mp-order-detail">
+    <header class="mp-detail-header">
+        <div class="mp-detail-heading">
+            <div class="mp-detail-eyebrow">Order <code>@shortOrderId</code></div>
+            <h2>Event ticket order</h2>
+            <p>Reservation, payment, delivery, attendee, and admission details in one place.</p>
+        </div>
+        <div class="mp-detail-actions">
+            <a class="btn btn-secondary" asp-action="Index" asp-route-storeId="@Model.StoreId" asp-route-orderSearch="@Model.ReturnQuery.OrderSearch" asp-route-orderEventId="@Model.ReturnQuery.OrderEventId" asp-route-orderStatus="@Model.ReturnQuery.OrderStatus" asp-route-orderPageSize="@Model.ReturnQuery.OrderPageSize" asp-route-orderPage="@Model.ReturnQuery.OrderPage" asp-fragment="orders"><svg aria-hidden="true"><use href="@($"{iconSpriteUrl}#back")"></use></svg>Back to orders</a>
+            @if (!string.IsNullOrWhiteSpace(order.InvoiceId))
+            {
+                <a class="btn btn-secondary" asp-controller="UIInvoice" asp-action="Invoice" asp-route-invoiceId="@order.InvoiceId"><svg aria-hidden="true"><use href="@($"{iconSpriteUrl}#nav-invoices")"></use></svg>Open invoice</a>
+            }
+            @if (item is not null)
+            {
+                <a class="btn btn-primary" asp-action="Event" asp-route-storeId="@Model.StoreId" asp-route-eventId="@item.Id"><svg aria-hidden="true"><use href="@($"{iconSpriteUrl}#settings")"></use></svg>Edit event</a>
+            }
+        </div>
+    </header>
+
+    <partial name="_StatusMessage" />
+
+    <div class="mp-detail-stats" aria-label="Order summary">
+        <div class="mp-detail-stat"><span class="mp-detail-stat-icon"><svg aria-hidden="true"><use href="@($"{iconSpriteUrl}#nav-invoices")"></use></svg></span><div class="mp-detail-stat-copy"><span>Order status</span><strong><span class="mp-badge @statusClass">@order.Status</span></strong><small>@(reservationExpired ? "Reservation expired" : order.PosMode ? "Point of sale" : "Online checkout")</small></div></div>
+        <div class="mp-detail-stat"><span class="mp-detail-stat-icon"><svg aria-hidden="true"><use href="@($"{iconSpriteUrl}#payment-receive")"></use></svg></span><div class="mp-detail-stat-copy"><span>Order total</span><strong>@Money(order.Total)</strong><small>@(order.AmountsFromInvoice ? "Recovered from the BTCPay invoice" : $"{Model.Lines.Sum(line => line.Quantity)} ticket{(Model.Lines.Sum(line => line.Quantity) == 1 ? "" : "s")}")</small></div></div>
+        <div class="mp-detail-stat"><span class="mp-detail-stat-icon"><svg aria-hidden="true"><use href="@($"{iconSpriteUrl}#checkout-complete")"></use></svg></span><div class="mp-detail-stat-copy"><span>Tickets issued</span><strong>@Model.Tickets.Count</strong><small>@Model.Tickets.Count(ticket => ticket.IsInside) currently inside</small></div></div>
+        <div class="mp-detail-stat"><span class="mp-detail-stat-icon"><svg aria-hidden="true"><use href="@($"{iconSpriteUrl}#actions-email")"></use></svg></span><div class="mp-detail-stat-copy"><span>Email delivery</span><strong><span class="mp-badge @(order.DeliverySent ? "is-ready" : "is-pending")">@(order.DeliverySent ? "Sent" : "Not sent")</span></strong><small>@(order.DeliverySent ? "Ticket email completed" : "No successful delivery recorded")</small></div></div>
+    </div>
+
+    <div class="mp-detail-layout">
+        <div class="mp-detail-main">
+            <section class="mp-detail-panel" aria-labelledby="order-overview-heading">
+                <div class="mp-detail-panel-head"><div><h3 id="order-overview-heading">Order overview</h3><p>Identifiers, event context, checkout source, and important timestamps.</p></div></div>
+                <div class="mp-detail-panel-body">
+                    <dl class="mp-detail-list">
+                        <dt>Order ID</dt><dd><code>@order.Id</code></dd>
+                        <dt>Event</dt><dd>@if (item is not null) { <a class="mp-detail-link" asp-action="Event" asp-route-storeId="@Model.StoreId" asp-route-eventId="@item.Id">@item.Name</a><div class="text-muted small">@item.StartsAt.ToBrowserDate() to @item.EndsAt.ToBrowserDate()</div><div class="text-muted small">@item.VenueName@if (!string.IsNullOrWhiteSpace(item.VenueAddress)) { <text> · @item.VenueAddress</text> }</div> } else { <strong>Deleted event</strong><div class="text-muted small">The order is retained even though its event is no longer available.</div> }</dd>
+                        <dt>Checkout source</dt><dd><strong>@(order.PosMode ? "Point of sale" : "Public storefront")</strong></dd>
+                        <dt>Admission ID check</dt><dd>@if (item is not null) { <strong>@(item.RequireIdCheck ? "Required" : "Not required")</strong> } else { <span class="text-muted">Event unavailable</span> }</dd>
+                        <dt>Invoice</dt><dd>@if (!string.IsNullOrWhiteSpace(order.InvoiceId)) { <a class="mp-detail-link" asp-controller="UIInvoice" asp-action="Invoice" asp-route-invoiceId="@order.InvoiceId"><code>@order.InvoiceId</code></a> } else { <span class="text-muted">Not created</span> }</dd>
+                        <dt>Created</dt><dd>@order.CreatedAt.ToBrowserDate()</dd>
+                        <dt>Reservation expires</dt><dd>@if (order.ReservationExpiresAt is { } expiresAt) { @expiresAt.ToBrowserDate() @if (reservationExpired) { <span class="mp-badge is-warning ms-1">Expired</span> } } else { <span class="text-muted">Not captured for this legacy order</span> }</dd>
+                        <dt>Terms accepted</dt><dd>@if (order.TermsAcceptedAt is { } termsAcceptedAt) { @termsAcceptedAt.ToBrowserDate() } else { <span class="text-muted">Not recorded</span> }</dd>
+                        <dt>Paid</dt><dd>@if (order.PaidAt is { } paidAt) { @paidAt.ToBrowserDate() } else { <span class="text-muted">Not paid</span> }</dd>
+                    </dl>
+                </div>
+            </section>
+
+            <section class="mp-detail-panel" aria-labelledby="order-items-heading">
+                <div class="mp-detail-panel-head"><div><h3 id="order-items-heading">Ticket items</h3><p>@(order.AmountsFromInvoice ? "Legacy line pricing recovered from the associated BTCPay invoice." : order.Total is null ? "Ticket types and quantities are retained; legacy pricing was not captured." : "Purchased ticket types, quantities, and prices captured with this order.")</p></div></div>
+                <div class="table-responsive">
+                    <table class="table mp-detail-table align-middle">
+                        <thead><tr><th>Ticket type</th><th class="text-center">Quantity</th><th class="text-end">Unit price</th><th class="text-end">Total</th></tr></thead>
+                        <tbody>
+                            @if (!Model.Lines.Any())
+                            {
+                                <tr><td class="mp-detail-empty" colspan="4">No ticket line information is available for this order.</td></tr>
+                            }
+                            @foreach (var line in Model.Lines)
+                            {
+                                <tr><td><span class="mp-cell-title">@line.TicketTypeName</span><code class="mp-cell-meta">@line.TicketTypeId</code></td><td class="text-center"><strong>@line.Quantity</strong></td><td class="text-end text-nowrap">@Money(line.UnitPrice)</td><td class="text-end text-nowrap"><strong>@Money(line.Total)</strong></td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="mp-detail-panel" aria-labelledby="attendees-heading">
+                <div class="mp-detail-panel-head"><div><h3 id="attendees-heading">Attendee details</h3><p>Information entered for each person during checkout.</p></div><span class="mp-badge is-draft">@Model.Attendees.Count attendee@(Model.Attendees.Count == 1 ? "" : "s")</span></div>
+                <div class="table-responsive">
+                    <table class="table mp-detail-table align-middle">
+                        <thead><tr><th>Attendee</th><th>Ticket type</th><th>Contact</th><th>Profile</th></tr></thead>
+                        <tbody>
+                            @if (!Model.Attendees.Any())
+                            {
+                                <tr><td class="mp-detail-empty" colspan="4">No separate attendee details were captured for this order.</td></tr>
+                            }
+                            @foreach (var attendee in Model.Attendees)
+                            {
+                                <tr>
+                                    <td><span class="mp-cell-title">@(string.IsNullOrWhiteSpace(attendee.Name) ? "Unnamed attendee" : attendee.Name)</span>@if (!string.IsNullOrWhiteSpace(attendee.Nickname)) { <span class="mp-cell-meta">Badge: @attendee.Nickname</span> }</td>
+                                    <td><span class="mp-cell-title">@attendee.TicketTypeName</span><code class="mp-cell-meta">@attendee.TicketTypeId</code></td>
+                                    <td>@if (!string.IsNullOrWhiteSpace(attendee.Email)) { <a class="mp-detail-link" href="@($"mailto:{attendee.Email}")">@attendee.Email</a> }@if (!string.IsNullOrWhiteSpace(attendee.Phone)) { <span class="mp-cell-meta">@attendee.Phone</span> }</td>
+                                    <td>@if (!string.IsNullOrWhiteSpace(attendee.Company)) { <span class="mp-cell-title">@attendee.Company</span> }@if (!string.IsNullOrWhiteSpace(attendee.Country)) { <span class="mp-cell-meta">@attendee.Country</span> }</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="mp-detail-panel" aria-labelledby="issued-tickets-heading">
+                <div class="mp-detail-panel-head"><div><h3 id="issued-tickets-heading">Issued tickets &amp; admissions</h3><p>Delivery-safe ticket identifiers, current door state, entrances, and ID-check history.</p></div><span class="mp-badge @(Model.Tickets.Any() ? "is-ready" : "is-pending")">@Model.Tickets.Count issued</span></div>
+                @if (!Model.Tickets.Any())
+                {
+                    <div class="mp-detail-empty">Tickets are issued after this order reaches its configured paid state.</div>
+                }
+                else
+                {
+                    <div class="mp-ticket-list">
+                        @foreach (var ticket in Model.Tickets)
+                        {
+                            var ticketStatusClass = ticket.Revoked ? "is-revoked" : ticket.IsInside ? "is-ready" : "is-draft";
+                            var ticketStatus = ticket.Revoked ? "Revoked" : ticket.IsInside ? "Inside" : "Outside";
+                            <article class="mp-ticket-card">
+                                <div class="mp-ticket-head">
+                                    <div><h4>@(string.IsNullOrWhiteSpace(ticket.AttendeeName) ? "Unnamed ticket holder" : ticket.AttendeeName)</h4><p>@ticket.TicketTypeName@if (!string.IsNullOrWhiteSpace(ticket.AttendeeEmail)) { <text> · @ticket.AttendeeEmail</text> }</p><code class="mp-ticket-id">@ticket.TicketId</code></div>
+                                    <span class="mp-badge @ticketStatusClass">@ticketStatus</span>
+                                </div>
+                                <div class="mp-admission-grid">
+                                    <div class="mp-admission-metric"><span>Entrances</span><strong>@ticket.EntranceCount</strong></div>
+                                    <div class="mp-admission-metric"><span>ID confirmed</span><strong>@ticket.IdConfirmedCount</strong></div>
+                                    <div class="mp-admission-metric"><span>ID rejected</span><strong>@ticket.IdRejectedCount</strong></div>
+                                    <div class="mp-admission-metric"><span>Last activity</span><strong>@ticket.LastActivityAt.ToBrowserDate()</strong></div>
+                                </div>
+                                <div class="mp-admission-audit">
+                                    <div><strong>Issued:</strong> @ticket.IssuedAt.ToBrowserDate()</div>
+                                    @if (ticket.CheckedInAt is { } checkedInAt)
+                                    {
+                                        <div><strong>Last check-in:</strong> @checkedInAt.ToBrowserDate()@if (!string.IsNullOrWhiteSpace(ticket.CheckedInBy)) { <text> · by @ticket.CheckedInBy</text> }@if (!string.IsNullOrWhiteSpace(ticket.CheckInGate)) { <text> · @ticket.CheckInGate</text> }</div>
+                                    }
+                                    @if (ticket.CheckedOutAt is { } checkedOutAt)
+                                    {
+                                        <div><strong>Last check-out:</strong> @checkedOutAt.ToBrowserDate()@if (!string.IsNullOrWhiteSpace(ticket.CheckedOutBy)) { <text> · by @ticket.CheckedOutBy</text> }@if (!string.IsNullOrWhiteSpace(ticket.CheckOutGate)) { <text> · @ticket.CheckOutGate</text> }</div>
+                                    }
+                                    @if (ticket.LastIdCheckedAt is { } lastIdCheckedAt)
+                                    {
+                                        <div><strong>Last ID decision:</strong> @(ticket.LastIdCheckConfirmed == true ? "Confirmed" : ticket.LastIdCheckConfirmed == false ? "Rejected" : "Not recorded") · @lastIdCheckedAt.ToBrowserDate()@if (!string.IsNullOrWhiteSpace(ticket.LastIdCheckedBy)) { <text> · by @ticket.LastIdCheckedBy</text> }</div>
+                                    }
+                                </div>
+                            </article>
+                        }
+                    </div>
+                }
+            </section>
+        </div>
+
+        <aside class="mp-detail-side">
+            <section class="mp-detail-panel" aria-labelledby="payment-summary-heading">
+                <div class="mp-detail-panel-head"><div><h3 id="payment-summary-heading">Payment summary</h3><p>@(order.AmountsFromInvoice ? "Total recovered from the associated BTCPay invoice." : order.Total is null ? "This legacy order did not capture a monetary snapshot." : "Amounts stored with the order.")</p></div></div>
+                <div class="mp-detail-panel-body mp-money-lines">
+                    @if (order.Subtotal is { } subtotal)
+                    {
+                        <div class="mp-money-row"><span>Subtotal</span><strong>@Money(subtotal)</strong></div>
+                    }
+                    @if (order.DiscountAmount is > 0m)
+                    {
+                        <div class="mp-money-row is-discount"><span>Discount@if (!string.IsNullOrWhiteSpace(order.PromoCode)) { <text> · @order.PromoCode</text> }</span><strong>−@Money(order.DiscountAmount)</strong></div>
+                    }
+                    <div class="mp-money-row is-total"><span>Total</span><strong>@Money(order.Total)</strong></div>
+                    @if (order.AmountsFromInvoice)
+                    {
+                        <div class="text-muted small">The original line subtotal and discount were not stored. Open the invoice for the authoritative payment record.</div>
+                    }
+                    else if (order.Total is null)
+                    {
+                        <div class="text-muted small">Open the linked invoice, when available, to inspect the authoritative payment record.</div>
+                    }
+                </div>
+            </section>
+
+            <section class="mp-detail-panel" aria-labelledby="customer-heading">
+                <div class="mp-detail-panel-head"><div><h3 id="customer-heading">Customer</h3><p>Buyer and billing contact.</p></div></div>
+                <div class="mp-detail-panel-body">
+                    <h4 class="mp-customer-name">@(string.IsNullOrWhiteSpace(buyerName) ? "Unnamed customer" : buyerName)</h4>
+                    @if (!string.IsNullOrWhiteSpace(order.BuyerEmail))
+                    {
+                        <a class="mp-customer-email" href="@($"mailto:{order.BuyerEmail}")">@order.BuyerEmail</a>
+                    }
+                    <div class="mp-customer-meta">
+                        <div><span>Phone</span><strong>@(string.IsNullOrWhiteSpace(order.BuyerPhone) ? "Not provided" : order.BuyerPhone)</strong></div>
+                        <div><span>Country</span><strong>@(string.IsNullOrWhiteSpace(order.BuyerCountry) ? "Not provided" : order.BuyerCountry)</strong></div>
+                        <div><span>Company</span><strong>@(string.IsNullOrWhiteSpace(order.BuyerCompany) ? "Not provided" : order.BuyerCompany)</strong></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="mp-detail-panel" aria-labelledby="timeline-heading">
+                <div class="mp-detail-panel-head"><div><h3 id="timeline-heading">Order timeline</h3><p>Recorded lifecycle milestones.</p></div></div>
+                <div class="mp-detail-panel-body">
+                    <ol class="mp-timeline">
+                        <li><span class="mp-timeline-dot"></span><div><strong>Order created</strong><span>@order.CreatedAt.ToBrowserDate()</span></div></li>
+                        @if (order.ReservationExpiresAt is { } reservationExpiry)
+                        {
+                            <li><span class="mp-timeline-dot"></span><div><strong>Reservation @(reservationExpired ? "expired" : "expiry")</strong><span>@reservationExpiry.ToBrowserDate()</span></div></li>
+                        }
+                        @if (order.TermsAcceptedAt is { } termsAccepted)
+                        {
+                            <li><span class="mp-timeline-dot"></span><div><strong>Terms accepted</strong><span>@termsAccepted.ToBrowserDate()</span></div></li>
+                        }
+                        @if (order.PaidAt is { } paid)
+                        {
+                            <li><span class="mp-timeline-dot"></span><div><strong>Payment confirmed</strong><span>@paid.ToBrowserDate()</span></div></li>
+                        }
+                        @if (Model.Tickets.Any())
+                        {
+                            <li><span class="mp-timeline-dot"></span><div><strong>Tickets issued</strong><span>@Model.Tickets.Min(ticket => ticket.IssuedAt).ToBrowserDate() · @Model.Tickets.Count total</span></div></li>
+                        }
+                        <li><span class="mp-timeline-dot"></span><div><strong>Email delivery</strong><span>@(order.DeliverySent ? "Completed" : "No successful delivery recorded")</span></div></li>
+                    </ol>
+                </div>
+            </section>
+        </aside>
+    </div>
+
+    <div class="mp-attribution"><svg aria-hidden="true"><use href="@($"{iconSpriteUrl}#info")"></use></svg><div><strong>Created by MakePay.io.</strong> Accept 90+ currencies in a decentralized way with BTCPay Server. <a href="https://makepay.io" target="_blank" rel="noopener noreferrer">Explore MakePay</a>.</div></div>
+</div>
