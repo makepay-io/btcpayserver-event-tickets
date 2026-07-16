@@ -1047,6 +1047,165 @@ public class TicketTests
         Assert.Equal(expected, TicketPublicUrl.ToAbsoluteHttpUrl(pathOrUrl, requestScheme, requestHost));
     }
 
+    [Fact]
+    public void AdminOrderQueryFiltersTheFullCollectionBeforePaginating()
+    {
+        var eventA = Event();
+        var eventB = Event();
+        eventB.Id = "event-b";
+        eventB.Name = "Second Event";
+        var createdAt = new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.Zero);
+        var orders = Enumerable.Range(0, 30)
+            .Select(index => new TicketOrder
+            {
+                Id = $"paid-{index:D2}",
+                EventId = eventA.Id,
+                Status = TicketOrderStatus.Paid,
+                CreatedAt = createdAt.AddMinutes(index)
+            })
+            .Concat(Enumerable.Range(0, 10).Select(index => new TicketOrder
+            {
+                Id = $"other-event-{index:D2}",
+                EventId = eventB.Id,
+                Status = TicketOrderStatus.Paid,
+                CreatedAt = createdAt.AddHours(2).AddMinutes(index)
+            }))
+            .Concat(Enumerable.Range(0, 5).Select(index => new TicketOrder
+            {
+                Id = $"cancelled-{index:D2}",
+                EventId = eventA.Id,
+                Status = TicketOrderStatus.Cancelled,
+                CreatedAt = createdAt.AddHours(3).AddMinutes(index)
+            }))
+            .ToList();
+
+        var page = EventTicketOrderQueryService.Apply(orders, [eventA, eventB], new EventTicketOrderQuery
+        {
+            OrderEventId = eventA.Id,
+            OrderStatus = "paid",
+            OrderPage = 2,
+            OrderPageSize = 10
+        });
+
+        Assert.Equal(30, page.TotalItems);
+        Assert.Equal(3, page.TotalPages);
+        Assert.Equal(2, page.Page);
+        Assert.Equal(11, page.FirstItem);
+        Assert.Equal(20, page.LastItem);
+        Assert.Equal(10, page.Items.Count);
+        Assert.All(page.Items, order =>
+        {
+            Assert.Equal(eventA.Id, order.EventId);
+            Assert.Equal(TicketOrderStatus.Paid, order.Status);
+        });
+        Assert.Equal("paid-19", page.Items[0].Id);
+    }
+
+    [Theory]
+    [InlineData("order-special")]
+    [InlineData("invoice-special")]
+    [InlineData("Ada Buyer")]
+    [InlineData("buyer@example.com")]
+    [InlineData("Grace Hopper")]
+    [InlineData("attendee@example.com")]
+    [InlineData("Builder Summit")]
+    [InlineData("event")]
+    public void AdminOrderQuerySearchesOrderInvoiceAndCustomerFields(string search)
+    {
+        var item = Event();
+        var order = new TicketOrder
+        {
+            Id = "order-special",
+            InvoiceId = "invoice-special",
+            EventId = item.Id,
+            BuyerName = "Ada Buyer",
+            BuyerEmail = "buyer@example.com",
+            Attendees =
+            [
+                new TicketAttendee
+                {
+                    FirstName = "Grace",
+                    LastName = "Hopper",
+                    Email = "attendee@example.com"
+                }
+            ]
+        };
+
+        var page = EventTicketOrderQueryService.Apply([order], [item], new EventTicketOrderQuery
+        {
+            OrderSearch = $"  {search.ToUpperInvariant()}  "
+        });
+
+        Assert.Single(page.Items);
+        Assert.Equal(search.ToUpperInvariant(), page.Search);
+    }
+
+    [Fact]
+    public void AdminOrderQueryClampsUnsupportedAndOutOfRangeParameters()
+    {
+        var item = Event();
+        var orders = Enumerable.Range(0, 45).Select(index => new TicketOrder
+        {
+            Id = $"order-{index}",
+            EventId = item.Id,
+            CreatedAt = DateTimeOffset.UtcNow.AddMinutes(index)
+        }).ToList();
+
+        var lastPage = EventTicketOrderQueryService.Apply(orders, [item], new EventTicketOrderQuery
+        {
+            OrderSearch = "   ",
+            OrderEventId = "unknown-event",
+            OrderStatus = "999",
+            OrderPage = int.MaxValue,
+            OrderPageSize = 17
+        });
+        var firstPage = EventTicketOrderQueryService.Apply(orders, [item], new EventTicketOrderQuery
+        {
+            OrderPage = -100,
+            OrderPageSize = 10
+        });
+
+        Assert.Equal(25, lastPage.PageSize);
+        Assert.Equal(2, lastPage.Page);
+        Assert.Equal(20, lastPage.Items.Count);
+        Assert.False(lastPage.IsFiltered);
+        Assert.Equal(1, firstPage.Page);
+        Assert.Equal(10, firstPage.Items.Count);
+    }
+
+    [Fact]
+    public void AdminOrderQueryUsesOrderIdAsAStableSecondarySort()
+    {
+        var item = Event();
+        var createdAt = new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.Zero);
+        var orders = new[] { "order-a", "order-c", "order-b" }
+            .Select(id => new TicketOrder { Id = id, EventId = item.Id, CreatedAt = createdAt })
+            .ToList();
+
+        var page = EventTicketOrderQueryService.Apply(orders, [item], new EventTicketOrderQuery());
+
+        Assert.Equal(["order-c", "order-b", "order-a"], page.Items.Select(order => order.Id));
+    }
+
+    [Fact]
+    public void AdminOrderQueryReturnsSafeMetadataForAnEmptyCollection()
+    {
+        var page = EventTicketOrderQueryService.Apply([], [Event()], new EventTicketOrderQuery
+        {
+            OrderPage = 99,
+            OrderPageSize = 100
+        });
+
+        Assert.Empty(page.Items);
+        Assert.Equal(0, page.TotalItems);
+        Assert.Equal(1, page.TotalPages);
+        Assert.Equal(1, page.Page);
+        Assert.Equal(0, page.FirstItem);
+        Assert.Equal(0, page.LastItem);
+        Assert.False(page.HasPreviousPage);
+        Assert.False(page.HasNextPage);
+    }
+
     private static TicketCheckoutService Checkout(out TicketCodeService codes)
     {
         codes = new TicketCodeService(new EphemeralDataProtectionProvider());

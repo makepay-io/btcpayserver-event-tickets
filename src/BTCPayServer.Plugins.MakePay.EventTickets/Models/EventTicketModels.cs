@@ -264,10 +264,38 @@ public sealed class EventTicketsDashboardViewModel
     public required string StoreId { get; init; }
     public required EventTicketSettings Settings { get; init; }
     public required IReadOnlyList<TicketEvent> Events { get; init; }
-    public required IReadOnlyList<TicketOrder> Orders { get; init; }
+    public required EventTicketOrderPage Orders { get; init; }
     public required IReadOnlyList<IssuedTicket> Tickets { get; init; }
     public required IReadOnlyDictionary<string, string> ScannerAccessTokens { get; init; }
     public string? MappedBaseUrl { get; init; }
+}
+
+public sealed class EventTicketOrderQuery
+{
+    public string? OrderSearch { get; set; }
+    public string? OrderEventId { get; set; }
+    public string? OrderStatus { get; set; }
+    public int OrderPage { get; set; } = 1;
+    public int OrderPageSize { get; set; } = 25;
+}
+
+public sealed class EventTicketOrderPage
+{
+    public required IReadOnlyList<TicketOrder> Items { get; init; }
+    public string? Search { get; init; }
+    public string? EventId { get; init; }
+    public TicketOrderStatus? Status { get; init; }
+    public required int Page { get; init; }
+    public required int PageSize { get; init; }
+    public required int TotalItems { get; init; }
+    public required int TotalPages { get; init; }
+    public int FirstItem => TotalItems == 0 ? 0 : ((Page - 1) * PageSize) + 1;
+    public int LastItem => Math.Min(Page * PageSize, TotalItems);
+    public bool HasPreviousPage => Page > 1;
+    public bool HasNextPage => Page < TotalPages;
+    public bool IsFiltered => !string.IsNullOrWhiteSpace(Search) ||
+                              !string.IsNullOrWhiteSpace(EventId) ||
+                              Status is not null;
 }
 
 public sealed class EventStorefrontViewModel { public required string StoreId { get; init; } public required EventTicketSettings Settings { get; init; } public required IReadOnlyList<TicketEvent> Events { get; init; } public required IReadOnlyDictionary<string, Dictionary<string, int?>> Remaining { get; init; } public bool CleanUrls { get; init; } }

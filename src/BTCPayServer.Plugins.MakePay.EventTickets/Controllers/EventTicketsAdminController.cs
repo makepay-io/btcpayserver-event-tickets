@@ -23,13 +23,14 @@ public sealed class EventTicketsAdminController(
     IAuthorizationService authorization) : Controller
 {
     [HttpGet("")]
-    public async Task<IActionResult> Index(string storeId)
+    public async Task<IActionResult> Index(string storeId, [FromQuery] EventTicketOrderQuery? orderQuery)
     {
         var store = await stores.FindStore(storeId); if (store is null) return NotFound();
         var events = await repository.GetEventsWithScannerAccess(storeId);
+        var orderPage = EventTicketOrderQueryService.Apply(await repository.GetOrders(storeId), events, orderQuery);
         var scannerAccessTokens = events.ToDictionary(item => item.Id, secrets.EnsureScannerAccessToken, StringComparer.OrdinalIgnoreCase);
         ViewData.SetActivePage("EventTickets", "Event Tickets", "Event Tickets");
-        return View("~/Views/EventTickets/Index.cshtml", new EventTicketsDashboardViewModel { StoreId = storeId, Settings = await repository.GetSettings(storeId), Events = events, Orders = (await repository.GetOrders(storeId)).Take(100).ToList(), Tickets = await repository.GetTickets(storeId), ScannerAccessTokens = scannerAccessTokens, MappedBaseUrl = await eventApps.GetMappedBaseUrl(storeId) });
+        return View("~/Views/EventTickets/Index.cshtml", new EventTicketsDashboardViewModel { StoreId = storeId, Settings = await repository.GetSettings(storeId), Events = events, Orders = orderPage, Tickets = await repository.GetTickets(storeId), ScannerAccessTokens = scannerAccessTokens, MappedBaseUrl = await eventApps.GetMappedBaseUrl(storeId) });
     }
     [HttpGet("events/new")][HttpGet("events/{eventId}")]
     public async Task<IActionResult> Event(string storeId, string? eventId)

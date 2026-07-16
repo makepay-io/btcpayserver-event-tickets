@@ -2,6 +2,8 @@
 
 A self-hosted event storefront, ticket delivery system, POS, and QR admission workflow that turns paid BTCPay invoices into customer tickets.
 
+Version 1.6.1 adds server-side order search, event and payment-status filters, selectable page sizes, stable numbered pagination, responsive controls, and clear result ranges across the complete reservation history.
+
 Version 1.6.0 turns the protected per-event scanner into a complete door-state workflow. A scan is read-only until staff explicitly checks the holder in or confirms check-out, re-entry is supported and counted, events can require a staff-confirmed photo-ID decision, and confirmed/rejected ID checks are audited per ticket. The dashboard opens each scanner from a share dialog with a QR code, copyable link, direct open action, and link rotation warning.
 
 Version 1.5.0 replaced the global admin scanner with protected, per-event public scanner pages optimized for repeated mobile check-in. Each scanner validates only its event, shows the ticket holder and ticket type, supports camera, saved-image, and manual entry, and closes results automatically after a store-configurable delay (five seconds by default).
