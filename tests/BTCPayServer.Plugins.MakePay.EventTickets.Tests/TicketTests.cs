@@ -16,7 +16,7 @@ public class TicketTests
     [Fact]
     public void ReleaseVersionMetadataIsSynchronized()
     {
-        const string expected = "1.6.1";
+        const string expected = "1.6.2";
         var project = File.ReadAllText(RepositoryFile(
             "src", "BTCPayServer.Plugins.MakePay.EventTickets", "BTCPayServer.Plugins.MakePay.EventTickets.csproj"));
         var plugin = File.ReadAllText(RepositoryFile(
@@ -1204,6 +1204,198 @@ public class TicketTests
         Assert.Equal(0, page.LastItem);
         Assert.False(page.HasPreviousPage);
         Assert.False(page.HasNextPage);
+    }
+
+    [Fact]
+    public void AdminOrderDetailProjectsLineAttendeeAndAdmissionDataWithoutTicketSecrets()
+    {
+        var item = Event();
+        var order = new TicketOrder
+        {
+            Id = "order-1",
+            EventId = item.Id,
+            Lines = [new TicketOrderLine { TicketTypeId = "vip", Quantity = 2, UnitPrice = 60m }],
+            Attendees =
+            [
+                new TicketAttendee
+                {
+                    TicketTypeId = "vip",
+                    FirstName = "Ada",
+                    LastName = "Lovelace",
+                    Nickname = "Ada",
+                    Email = "ada@example.com",
+                    Phone = "+971500000000",
+                    Country = "AE",
+                    Company = "Analytical Engines"
+                }
+            ]
+        };
+        var issuedAt = new DateTimeOffset(2026, 7, 16, 8, 0, 0, TimeSpan.Zero);
+        var ticket = new IssuedTicket
+        {
+            Id = "ticket-1",
+            OrderId = order.Id,
+            EventId = item.Id,
+            TicketTypeId = "vip",
+            AttendeeName = "Ada Lovelace",
+            AttendeeEmail = "ada@example.com",
+            IssuedAt = issuedAt,
+            CheckedInAt = issuedAt.AddHours(1),
+            CheckedInBy = "door@example.com",
+            CheckInGate = "Main gate",
+            EntranceCount = 2,
+            IdConfirmedCount = 2,
+            IdRejectedCount = 1,
+            LastIdCheckedAt = issuedAt.AddMinutes(50),
+            LastIdCheckedBy = "door@example.com",
+            LastIdCheckConfirmed = true,
+            ProtectedCode = "must-not-project",
+            CodeHash = "must-not-project",
+            LastScannerOperationId = "must-not-project"
+        };
+        var unrelated = new IssuedTicket { Id = "ticket-2", OrderId = "another-order", IssuedAt = issuedAt };
+        var query = new EventTicketOrderQuery { OrderSearch = "Ada", OrderPage = 2, OrderPageSize = 10 };
+
+        var detail = EventTicketOrderDetailService.Build("store", order, item, [unrelated, ticket], query);
+
+        var line = Assert.Single(detail.Lines);
+        Assert.Equal("VIP", line.TicketTypeName);
+        Assert.Equal(120m, line.Total);
+        var attendee = Assert.Single(detail.Attendees);
+        Assert.Equal("Ada Lovelace", attendee.Name);
+        Assert.Equal("VIP", attendee.TicketTypeName);
+        var admission = Assert.Single(detail.Tickets);
+        Assert.Equal("ticket-1", admission.TicketId);
+        Assert.True(admission.IsInside);
+        Assert.Equal(2, admission.EntranceCount);
+        Assert.Equal("Main gate", admission.LastGate);
+        Assert.Equal(ticket.CheckedInAt, admission.LastActivityAt);
+        Assert.Same(query, detail.ReturnQuery);
+        Assert.Equal(order.Id, detail.Order.Id);
+        Assert.Equal(order.Total, detail.Order.Total);
+        Assert.Equal(item.Id, detail.Event?.Id);
+
+        var projectedProperties = typeof(EventTicketIssuedTicketDetail).GetProperties()
+            .Select(property => property.Name)
+            .ToHashSet(StringComparer.Ordinal);
+        Assert.DoesNotContain(nameof(IssuedTicket.ProtectedCode), projectedProperties);
+        Assert.DoesNotContain(nameof(IssuedTicket.CodeHash), projectedProperties);
+        Assert.DoesNotContain(nameof(IssuedTicket.LastScannerOperationId), projectedProperties);
+
+        var orderProperties = typeof(EventTicketAdminOrderDetail).GetProperties()
+            .Select(property => property.Name)
+            .ToHashSet(StringComparer.Ordinal);
+        Assert.DoesNotContain(nameof(TicketOrder.ProtectedPublicAccessToken), orderProperties);
+        Assert.DoesNotContain(nameof(TicketOrder.PublicAccessTokenHash), orderProperties);
+        Assert.DoesNotContain(nameof(TicketOrder.PublicBaseUrl), orderProperties);
+
+        var eventProperties = typeof(EventTicketAdminEventDetail).GetProperties()
+            .Select(property => property.Name)
+            .ToHashSet(StringComparer.Ordinal);
+        Assert.DoesNotContain(nameof(TicketEvent.ProtectedScannerAccessToken), eventProperties);
+        Assert.DoesNotContain(nameof(TicketEvent.ScannerAccessTokenHash), eventProperties);
+    }
+
+    [Fact]
+    public void AdminOrderDetailRetainsLegacyLinesWhenTheEventWasDeleted()
+    {
+        var order = new TicketOrder
+        {
+            Id = "legacy-order",
+            TicketTypeId = "deleted-type",
+            Quantity = 3,
+            Subtotal = 45m
+        };
+
+        var detail = EventTicketOrderDetailService.Build("store", order, null, []);
+
+        Assert.Null(detail.Event);
+        var line = Assert.Single(detail.Lines);
+        Assert.Equal("Deleted ticket type", line.TicketTypeName);
+        Assert.Equal("deleted-type", line.TicketTypeId);
+        Assert.Equal(3, line.Quantity);
+        Assert.Equal(15m, line.UnitPrice);
+        Assert.Equal(45m, line.Total);
+        Assert.Empty(detail.Attendees);
+        Assert.Empty(detail.Tickets);
+    }
+
+    [Fact]
+    public void AdminOrderDetailUsesLegacyOrderAmountsInsteadOfAChangedCurrentTicketPrice()
+    {
+        var item = Event();
+        item.TicketTypes.Single(type => type.Id == "general").Price = 99m;
+        var order = new TicketOrder
+        {
+            Id = "legacy-order",
+            EventId = item.Id,
+            TicketTypeId = "general",
+            Quantity = 3,
+            Subtotal = 45m,
+            Total = 45m
+        };
+
+        var line = Assert.Single(EventTicketOrderDetailService.Build("store", order, item, []).Lines);
+
+        Assert.Equal("General", line.TicketTypeName);
+        Assert.Equal(15m, line.UnitPrice);
+        Assert.Equal(45m, line.Total);
+    }
+
+    [Fact]
+    public void AdminOrderDetailDoesNotFabricateAmountsOrExpiryForAVersionOneOrder()
+    {
+        var item = Event();
+        item.TicketTypes.Single(type => type.Id == "general").Price = 99m;
+        var order = new TicketOrder
+        {
+            Id = "v1-order",
+            EventId = item.Id,
+            TicketTypeId = "general",
+            Quantity = 2,
+            InvoiceId = "legacy-invoice",
+            Status = TicketOrderStatus.Cancelled
+        };
+
+        var detail = EventTicketOrderDetailService.Build("store", order, item, []);
+
+        var line = Assert.Single(detail.Lines);
+        Assert.Null(line.UnitPrice);
+        Assert.Null(line.Total);
+        Assert.Null(detail.Order.Currency);
+        Assert.Null(detail.Order.Subtotal);
+        Assert.Null(detail.Order.DiscountAmount);
+        Assert.Null(detail.Order.Total);
+        Assert.Null(detail.Order.ReservationExpiresAt);
+        Assert.False(detail.Order.AmountsFromInvoice);
+    }
+
+    [Fact]
+    public void AdminOrderDetailRecoversAVersionOneTotalFromItsTenantCheckedInvoiceSnapshot()
+    {
+        var item = Event();
+        item.TicketTypes.Single(type => type.Id == "general").Price = 99m;
+        var order = new TicketOrder
+        {
+            Id = "v1-order",
+            EventId = item.Id,
+            TicketTypeId = "general",
+            Quantity = 2,
+            InvoiceId = "legacy-invoice",
+            Status = TicketOrderStatus.Paid
+        };
+
+        var detail = EventTicketOrderDetailService.Build("store", order, item, [], invoice: new(42m, "AED"));
+
+        var line = Assert.Single(detail.Lines);
+        Assert.Equal(21m, line.UnitPrice);
+        Assert.Equal(42m, line.Total);
+        Assert.Equal("AED", detail.Order.Currency);
+        Assert.Null(detail.Order.Subtotal);
+        Assert.Null(detail.Order.DiscountAmount);
+        Assert.Equal(42m, detail.Order.Total);
+        Assert.Null(detail.Order.ReservationExpiresAt);
+        Assert.True(detail.Order.AmountsFromInvoice);
     }
 
     private static TicketCheckoutService Checkout(out TicketCodeService codes)
