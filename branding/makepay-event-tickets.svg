@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">MakePay Event Tickets</title>
+  <desc id="description">An event ticket with a scannable code.</desc>
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="#0b1118"/>
+  <rect x="24" y="24" width="464" height="464" rx="104" fill="none" stroke="#26313d" stroke-width="8"/>
+  <path d="M104 154h304v62c-24 0-44 20-44 44s20 44 44 44v62H104v-62c24 0 44-20 44-44s-20-44-44-44v-62Z" fill="#111a24" stroke="#fff" stroke-width="26" stroke-linejoin="round"/>
+  <path d="M256 180v18m0 32v18m0 32v18m0 32v18" fill="none" stroke="#51b13e" stroke-width="18" stroke-linecap="round"/>
+  <path d="M174 205h42v42h-42zm0 68h42v42h-42zm136-68h42v42h-42z" fill="none" stroke="#51b13e" stroke-width="18" stroke-linejoin="round"/>
+  <path d="M310 282h18v18h-18zm30 0h18v18h-18zm0 30h18v18h-18z" fill="#fff"/>
+</svg>

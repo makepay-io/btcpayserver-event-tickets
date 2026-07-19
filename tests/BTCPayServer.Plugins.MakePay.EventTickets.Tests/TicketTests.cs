@@ -16,7 +16,7 @@ public class TicketTests
     [Fact]
     public void ReleaseVersionMetadataIsSynchronized()
     {
-        const string expected = "1.6.2";
+        const string expected = "1.6.3";
         var project = File.ReadAllText(RepositoryFile(
             "src", "BTCPayServer.Plugins.MakePay.EventTickets", "BTCPayServer.Plugins.MakePay.EventTickets.csproj"));
         var plugin = File.ReadAllText(RepositoryFile(
@@ -573,23 +573,17 @@ public class TicketTests
     }
 
     [Fact]
-    public void StoreNavigationUsesBundledCurrentColorQrCodeIcon()
+    public void StoreNavigationUsesDedicatedCurrentColorTicketIcon()
     {
         var navigation = File.ReadAllText(RepositoryFile(
             "src", "BTCPayServer.Plugins.MakePay.EventTickets", "Views", "Shared", "EventTickets", "StoreNavExtension.cshtml"));
-        var sprite = File.ReadAllText(RepositoryFile(
-            "submodules", "btcpayserver", "BTCPayServer", "wwwroot", "img", "icon-sprite.svg"));
 
-        Assert.Contains("<vc:icon symbol=\"qr-code\" />", navigation, StringComparison.Ordinal);
+        Assert.Contains("class=\"icon icon-makepay-event-tickets\"", navigation, StringComparison.Ordinal);
+        Assert.Contains("viewBox=\"0 0 24 24\"", navigation, StringComparison.Ordinal);
+        Assert.Contains("currentColor", navigation, StringComparison.Ordinal);
+        Assert.Contains("aria-hidden=\"true\"", navigation, StringComparison.Ordinal);
         Assert.DoesNotContain("<img", navigation, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("<svg", navigation, StringComparison.OrdinalIgnoreCase);
-
-        var symbolStart = sprite.IndexOf("<symbol id=\"qr-code\"", StringComparison.Ordinal);
-        Assert.True(symbolStart >= 0, "BTCPay's bundled icon sprite must contain the QR code symbol.");
-        var symbolEnd = sprite.IndexOf("</symbol>", symbolStart, StringComparison.Ordinal);
-        Assert.True(symbolEnd > symbolStart, "The bundled QR code symbol must be complete.");
-        var qrCodeSymbol = sprite[symbolStart..(symbolEnd + "</symbol>".Length)];
-        Assert.Contains("currentColor", qrCodeSymbol, StringComparison.Ordinal);
+        Assert.DoesNotContain("<vc:icon", navigation, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
